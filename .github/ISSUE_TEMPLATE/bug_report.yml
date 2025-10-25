@@ -1,0 +1,50 @@
+name: 'Bug report'
+about: 'Use this form to report reproducible bugs. Provide steps to reproduce and expected behavior.'
+title: '[bug] '
+labels: ['bug']
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 'Summary'
+      description: 'Short description of the bug.'
+      placeholder: 'A short, descriptive summary of the issue.'
+  - type: textarea
+    id: steps
+    attributes:
+      label: 'Steps to reproduce'
+      description: 'Exact steps to reproduce the behavior. Include commands and inputs.'
+      placeholder: |
+        1. Do this
+        2. Then this
+        3. Observe the problem
+  - type: textarea
+    id: expected
+    attributes:
+      label: 'Expected behavior'
+      description: 'What you expected to happen.'
+      placeholder: 'Describe the expected outcome.'
+  - type: textarea
+    id: actual
+    attributes:
+      label: 'Actual behavior'
+      description: 'What actually happened, including error messages and stack traces.'
+      placeholder: 'Describe the observed outcome, include logs/errors.'
+  - type: input
+    id: environment
+    attributes:
+      label: 'Environment'
+      description: 'OS, runtime versions, and any relevant environment variables (do not include secrets).'
+      placeholder: 'e.g. Ubuntu 22.04, Node v20, Rust 1.70'
+  - type: textarea
+    id: additional
+    attributes:
+      label: 'Additional context'
+      description: 'Screenshots, log excerpts, or other context that may help diagnose the issue.'
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 'Checklist'
+      options:
+        - label: 'I reproducible the issue in a minimal environment'
+        - label: 'I searched existing issues and PRs'

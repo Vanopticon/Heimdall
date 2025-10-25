@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "microsoft.docs.mcp": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "tools": [
+        "*"
+      ]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "tools": [
+        "*"
+      ]
+    },
+    "todoist": {
+      "type": "http",
+      "url": "https://ai.todoist.net/mcp",
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}
