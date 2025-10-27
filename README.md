@@ -1,141 +1,68 @@
-# Application Name
+
+# Heimdall
 
 ![Accessibility](https://img.shields.io/badge/Accessibility-%230170EA.svg?style=for-the-badge&logo=Accessibility&logoColor=white)
-![License](https://img.shields.io/github/license/JEleniel/template?style=for-the-badge)
-![Version](https://img.shields.io/github/v/release/JEleniel/template?style=for-the-badge)
-![Issues](https://img.shields.io/github/issues/JEleniel/template?style=for-the-badge)
-![Pull Requests](https://img.shields.io/github/issues-pr/JEleniel/template?style=for-the-badge)
-
-⭐ Star us on GitHub — it motivates us a lot!
+![License](https://img.shields.io/github/license/Vanopticon/Heimdall?style=for-the-badge)
+![Version](https://img.shields.io/github/v/release/Vanopticon/Heimdall?style=for-the-badge)
+![Issues](https://img.shields.io/github/issues/Vanopticon/Heimdall?style=for-the-badge)
+![Pull Requests](https://img.shields.io/github/issues-pr/Vanopticon/Heimdall?style=for-the-badge)
 
 ## Overview
 
-_A one to two paragraph describing the project, what it does, and where we plan to take it._
+**Heimdall** is the all-seeing eye and guardian of the entrances to Asgard. In the Vanopticon suite, Heimdall is the central data ingestion and processing hub, enabling secure, robust, and scalable cyber threat defense operations.
 
-> **Note:** This is a template repository. Replace `{username}` and `{repo}` in links and badges with your GitHub username and repository name. Fill in the overview, features, and other sections with details specific to your project.
+Heimdall collects, normalizes, and processes data from diverse sources, providing a unified pipeline for threat intelligence, analytics, and operational visibility.
 
-## Features
+## Key Features
 
-- Feature 1
-- Feature 2
-- Feature 3
+- **Centralized Data Ingestion:** Aggregates data from multiple sources (logs, sensors, APIs, etc.)
+- **Scalable Processing:** Modular architecture for high-throughput, low-latency data handling
+- **Security-First Design:** Implements OWASP ASVS controls and secure coding best practices
+- **Extensible Pipelines:** Supports custom enrichment, filtering, and transformation modules
+- **Integration Ready:** Works seamlessly with other Vanopticon components and common CTD tools
+- **Robust Error Handling:** Ensures reliability and maintainability in production environments
 
-## Documentation
+## Architecture
 
-Our documentation is organized into the following sections:
-
-- **API Reference**: Technical documentation for integrators
-- **User Guide**: Step-by-step instructions for users
-- **Tutorials**: Hands-on learning materials
-- **Architecture**: System design and components
-
-For full documentation, visit:
-
-- [Full Documentation](docs/README.md)
-- [API Reference](docs/api/README.md)
-- [Architecture Overview](docs/architecture.md)
+Heimdall is built for scalability and maintainability, following the [Twelve-Factor App](https://12factor.net/) methodology. It leverages modern technologies and design patterns to ensure high performance and operational resilience.
 
 ## Getting Started
 
-Explore the [Getting Started](../../wiki/Getting-Started) guide.
+1. **Clone the Repository**
 
-> **Note:** Replace this section with installation and setup instructions for your project.
+   ```bash
+   git clone https://github.com/Vanopticon/Heimdall.git
+   ```
 
-### Prerequisites
+2. **Configuration**
+   + Edit `configuration/config.json` to set up data sources and processing modules.
+3. **Run Heimdall**
+   + See `/docs/README.md` for build and deployment steps.
 
-- Requirement 1
-- Requirement 2
+## Documentation
 
-### Installation
+- [Project Documentation](/docs/README.md)
+- [API Reference](/docs/api/README.md)
+- [Design & Architecture](/docs/design/agents/TECHNOLOGIES.md)
 
-```bash
-# Install command here
-```
+## Security & Compliance
 
-## Configuration
+Heimdall is developed in accordance with:
 
-The following configuration options are available:
-
-### Environment Variables
-
-| Variable     | Description                       | Default |
-| ------------ | --------------------------------- | ------- |
-| `API_KEY`    | Authentication key for API access | N/A     |
-| `DEBUG_MODE` | Enable debug logging              | false   |
-| `PORT`       | Server port number                | 3000    |
-
-### Configuration File
-
-The `config.yml` file supports the following options:
-
-```yaml
-api:
-    timeout: 5000
-    retries: 3
-logging:
-    level: info
-    path: ./logs
-```
+- [OWASP Application Security Verification Standard (ASVS)](https://owasp.org/www-project-application-security-verification-standard/)
+- [Web Content Accessibility Guidelines (WCAG) 2.2 AAA](https://www.w3.org/WAI/standards-guidelines/wcag/docs/)
 
 ## Support
 
-[Getting Support](SUPPORT.md)
+See [SUPPORT.md](SUPPORT.md) for help and support.
 
-### Supported Platforms
+## Contributing
 
-| Platform | Version 1.0.0 | Version 1.1.0 | Notes               |
-| -------- | :-----------: | :-----------: | ------------------- |
-| Linux    |       ✔       |       ✔       | Full support        |
-| Windows  |       ✔       |       ✔       | Limited WSL support |
-| MacOS    |       ⚠       |       ✔       | Intel/ARM support   |
-| BSD      |      ❌       |       ⚠       | Testing needed      |
-
-## Feedback and Contributions
-
-Please be sure to read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-[Reporting Security Issues](SECURITY.md)
-
-[Contributing to the Project](CONTRIBUTING.md)
-
-## Building and Testing
-
-### Build Requirements
-
-- Requirement 1
-- Requirement 2
-
-### Build Steps
-
-```bash
-# Build commands here
-```
-
-> **Note:** Add your project's build commands here.
-
-### Running Tests
-
-```bash
-# Test commands here
-```
-
-> **Note:** Add your project's test commands here.
-
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning.
+Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md), [Reporting Security Issues](SECURITY.md), and [Contributing Guidelines](CONTRIBUTING.md).
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-## Contributors
-
-<a href="https://github.com/{username}/{repo}/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo={username}/{repo}" />
-</a>
-
-Made with [contrib.rocks](https://contrib.rocks).
+This project is licensed under multiple open source licenses. See [LICENSE-Apache.md](LICENSE-Apache.md), [LICENSE-GPL.md](LICENSE-GPL.md), and [LICENSE-MIT.md](LICENSE-MIT.md) for details.
 
 ## Tooling
 
@@ -147,6 +74,6 @@ The tools we use include:
 ![VS Code](https://img.shields.io/badge/VS%20Code-0078d7.svg?style=for-the-badge&logo=visual-studio-code&logoColor=white)
 ![Git](https://img.shields.io/badge/git-%23F05033.svg?style=for-the-badge&logo=git&logoColor=white)
 
-# Acknowledgements
+---
 
-Badges provided by [Shields.io](https://shields.io)
+© Vanopticon. All rights reserved.
