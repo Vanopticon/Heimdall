@@ -1,19 +1,67 @@
-# Project specific
-# Add files and directories specific to your project that should be ignored here
+### Project-specific
+# Add files and directories specific to this project that should be ignored below.
+# Build output and install artifacts
+build/
+dist/
+.svelte-kit/
+node_modules/
 
-# Visual Studio Code
-.vscode/*
+### Package manager
+# pnpm
+pnpm-lock.yaml
+node_modules/
+
+### Node
+# dotenv and env files (allow example files)
+.env
+.env.*
+!.env.example
+# npm and yarn
+package-lock.json
+yarn.lock
+
+### Editor and IDE
+# VS Code
+.vscode/
 !.vscode/*.code-snippets
 !.vscode/extensions.json
 !.vscode/launch.json
 !.vscode/settings.*.json
 !.vscode/settings.json
 !.vscode/tasks.json
-.history/
-.vscode-test
+.vscode-test/
 *.vsix
 
-# Archive Files
+.history/
+
+### OS generated files
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.DocumentRevisions-V100
+._*
+
+# Windows
+$RECYCLE.BIN/
+[Dd]esktop.ini
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+*.lnk
+*.stackdump
+
+# Linux
+*~
+.directory
+.fuse_hidden*
+.nfs*
+.Trash-*
+
+### Archives
 *.7z
 *.bz2
 *.bzip
@@ -44,100 +92,71 @@
 *.zip
 *.zst
 
-# Backup Files
+### Backup and diff
 *.bak
 *.gho
 *.ori
 *.orig
-
-# Diff Files
 *.diff
 *.patch
 
-# Configuration Files
-.env*
-!.env.example
-
-# Linux Files
-*~
-.directory
-.fuse_hidden*
-.nfs*
-.Trash-*
-
-# Windows Files
-$RECYCLE.BIN/
-[Dd]esktop.ini
-ehthumbs.db
-ehthumbs_vista.db
-*.lnk
-*.stackdump
-Thumbs.db
-Thumbs.db:encryptable
-
-# MacOS Files
-._*
-.apdisk
-.AppleDB
-.AppleDesktop
-.AppleDouble
-.com.apple.timemachine.donotpresent
-.DocumentRevisions-V100
-.DS_Store
-.fseventsd
-.LSOverride
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-Icon
-Network Trash Folder
-Temporary Items
-
-# Cache, Temporary, and Other Common Files
+### Cache, Temp, and build artifacts
 .cache/
 .temp/
 temp/
 tmp/
 *.tmp
-*.orig
 *.rej
 
-# Security Files
-*.pem
-*.key
-*.crt
-*.cert
-*.keystore
-*.p12
-*.pfx
-
-# Logs and Diagnostics
+### Logs and runtime data
 logs/
-*.log
-*-debug.log*
-*-error.log*
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-# Runtime data
-*.pid
-*.pid.lock
-*.pfx
-
-# Logs and Diagnostics
-logs/
-*.log
-*-debug.log*
-*-error.log*
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-# Runtime data
 pids/
+*.log
+*-debug.log*
+*-error.log*
 *.pid
 *.pid.lock
 *.seed
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
+### Secrets and keys
+## Private keys and keystores
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+*.pkcs12
+*.jks
+*.keystore
+*.der
 
-# Added by cargo
+## Certificates and signing
+*.crt
+*.cer
+*.cert
 
-/target
+## PGP / GPG
+*.gpg
+*.pgp
+*.asc
+
+## Common SSH private key names (repo-local)
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+## Credential files and keyrings
+.netrc
+*.secring
+*.keyring
+*.keychain-db
+
+## Service credential/config files (local)
+.aws/credentials
+.docker/config.json
+.npmrc
+
+### Misc
+*.orig
