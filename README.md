@@ -1,79 +1,123 @@
+# Heimdall — Central Ingestion, ETL & Data-Scrubbing Hub
 
-# Heimdall
+Heimdall (named for the keeper of the Rainbow Bridge) is the ETL, data scrubbing,
+normalization, enrichment, and tool-bridging component of the Vanopticon suite.
+It provides secure, resilient, and auditable ingestion pipelines that normalize
+and correlate telemetry into a graph model for downstream analysis, detection,
+and response.
 
-![Accessibility](https://img.shields.io/badge/Accessibility-%230170EA.svg?style=for-the-badge&logo=Accessibility&logoColor=white)
-![License](https://img.shields.io/github/license/Vanopticon/Heimdall?style=for-the-badge)
-![Version](https://img.shields.io/github/v/release/Vanopticon/Heimdall?style=for-the-badge)
-![Issues](https://img.shields.io/github/issues/Vanopticon/Heimdall?style=for-the-badge)
-![Pull Requests](https://img.shields.io/github/issues-pr/Vanopticon/Heimdall?style=for-the-badge)
+## Purpose
 
-## Overview
-
-**Heimdall** is the all-seeing eye and guardian of the entrances to Asgard. In the Vanopticon suite, Heimdall is the central data ingestion and processing hub, enabling secure, robust, and scalable cyber threat defense operations.
-
-Heimdall collects, normalizes, and processes data from diverse sources, providing a unified pipeline for threat intelligence, analytics, and operational visibility.
+- **Ingest** telemetry from vendors, sensors, APIs, and batch uploads.
+- **Transform & scrub** incoming data to canonical forms, removing PII where required and normalizing entity types (IP, domains, hashes, emails, etc.).
+- **Enrich** data with ASN, geolocation, NPI classification, and other contextual metadata.
+- **Correlate** entities and sightings in a graph store to enable threat linkage, deduplication, and provenance tracking.
 
 ## Key Features
 
-- **Centralized Data Ingestion:** Aggregates data from multiple sources (logs, sensors, APIs, etc.)
-- **Scalable Processing:** Modular architecture for high-throughput, low-latency data handling
-- **Security-First Design:** Implements OWASP ASVS controls and secure coding best practices
-- **Extensible Pipelines:** Supports custom enrichment, filtering, and transformation modules
-- **Integration Ready:** Works seamlessly with other Vanopticon components and common CTD tools
-- **Robust Error Handling:** Ensures reliability and maintainability in production environments
+- **Zero NPI Output**: All output has been scrubbed clean of NPI, or the NPI has been one way encoded to allow it to still be processed securely.
+- **Flexible ingestion**: HTTP APIs and upload handlers accepting raw payloads and multipart uploads. Streaming writes avoid large memory spikes.
+- **Graph & vector store**: Uses a database with graph and vector capabilities to represent entities, their relationships, and sighting provenance for high-fidelity correlation (Postgres+AGE is a common choice for development; other graph/vector-capable stores are supported).
+- **Idempotent operations**: Merge/`MERGE`-style graph operations prevent duplication and make re-ingest safe.
+- **Pluggable pipeline stages**: Parsing, canonicalization, enrichment, and routing stages designed to be extended with vendor connectors or enrichers.
+- **Secure-by-default runtime**: Separates machine-to-machine and interactive user auth: OAuth2 Client Credentials (machine-to-machine / client credentials flow) is used for service-to-service integrations, while OIDC is used for interactive user login; the runtime also enforces strict Content-Security-Policy, TLS 1.3, secure session cookies, and rate limiting.
+- **Operational tooling**: Clear environment-driven configuration, logging, and error handling for production readiness.
 
-## Architecture
+## Architecture Overview
 
-Heimdall is built for scalability and maintainability, following the [Twelve-Factor App](https://12factor.net/) methodology. It leverages modern technologies and design patterns to ensure high performance and operational resilience.
+- **Frontend / UI**: Built with SvelteKit and shipped via the Node adapter (SSR capable). Frontend is served from the build output by the Express wrapper.
+- **Application Server**: An Express wrapper (`server/server.ts`) provides TLS, authentication support for both interactive users and machine clients (OIDC via `openid-client` for user login; OAuth2 Client Credentials for machine-to-machine integrations), session management, and serves the SvelteKit handler.
+- **Graph & vector store**: A database with graph and vector capabilities stores the Heimdall data model. Postgres+AGE is a common and recommended choice for development; when using Postgres+AGE the project uses `age-schema-client` (wrapped in `src/lib/server/ageClient.ts`) for schema-aware operations and raw Cypher fallbacks. Other graph/vector-capable stores can be used in production deployments.
+- **Pipelines & APIs**: Ingest endpoints (e.g. `src/routes/api/upload/+server.ts`) and future pipeline workers normalize and enrich incoming telemetry.
 
-## Getting Started
+Refer to `docs/design/Architecture.md` and `docs/design/DataModel.md` for diagrams and the canonical graph model.
 
-1. **Clone the Repository**
+## Data Model (high level)
 
-   ```bash
-   git clone https://github.com/Vanopticon/Heimdall.git
-   ```
+- Graph-centered: nodes for `dumps`, `fields`, `field_value`, `ip`, `NPI_Category`, and `sightings` to capture occurrences and provenance.
+- Support for deduplication and cross-field sightings to surface linkages between otherwise separate records.
 
-2. **Configuration**
-   + Edit `configuration/config.json` to set up data sources and processing modules.
-3. **Run Heimdall**
-   + See `/docs/README.md` for build and deployment steps.
+See `sql/v1/001-create_graph.sql` for the authoritative schema and indices.
 
-## Documentation
+## Getting Started (Development)
 
-- [Project Documentation](/docs/README.md)
-- [API Reference](/docs/api/README.md)
-- [Design & Architecture](/docs/design/agents/TECHNOLOGIES.md)
+Prerequisites:
 
-## Security & Compliance
+- Node.js (recommended LTS) and `pnpm` installed.
+- A database with graph and vector capabilities (Postgres+AGE recommended for integration tests / dev).
 
-Heimdall is developed in accordance with:
+Quick dev run (local, minimal):
 
-- [OWASP Application Security Verification Standard (ASVS)](https://owasp.org/www-project-application-security-verification-standard/)
-- [Web Content Accessibility Guidelines (WCAG) 2.2 AAA](https://www.w3.org/WAI/standards-guidelines/wcag/docs/)
+```bash
+pnpm install
+pnpm build
+# Run the server (reads TLS cert and key from env, or place certs locally)
+NODE_ENV=development VOH_HOST=127.0.0.1 VOH_PORT=443 \
+  VOH_TLS_KEY=/path/to/tls.key VOH_TLS_CERT=/path/to/tls.crt \
+  VOH_OAUTH_DISCOVERY_URL="https://example/.well-known/openid-configuration" \
+  VOH_OAUTH_AUTH_ID=client_id VOH_OAUTH_AUTH_SECRET=client_secret \
+  pnpm dev
+```
 
-## Support
+Notes:
 
-See [SUPPORT.md](SUPPORT.md) for help and support.
+- `server/server.ts` enforces a set of required environment variables. At startup the server will validate that the OIDC discovery URL is reachable and will exit on misconfiguration.
+- Database connectivity is taken from `VOH_DATABASE_URL` or the normal `PG*` environment variables and falls back to sane defaults in the code but should be configured for production.
+
+## Configuration (important environment variables)
+
+- `VOH_HOST`, `VOH_PORT` — host and port the server binds to.
+- `VOH_TLS_KEY`, `VOH_TLS_CERT` — TLS key and certificate paths (required).
+- `VOH_OAUTH_DISCOVERY_URL`, `VOH_OAUTH_AUTH_ID`, `VOH_OAUTH_AUTH_SECRET`, `VOH_OAUTH_SCOPES` — OIDC configuration used for interactive user login (browser-based login flows). Machine-to-machine (service-to-service) integrations should use the OAuth2 Client Credentials (client credentials) flow and obtain bearer tokens from your identity provider; client credentials and service tokens should be managed securely by your deployment/secret management solution.
+- `VOH_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` — database connection information.
+- `AGE_GRAPH` — logical graph name inside the AGE-enabled database.
+
+Keep secrets out of source control and use a secrets manager for production.
+
+## Security & Operations
+
+- TLS 1.3 is required by the default server; verify certificate management for automated renewals (ACME / cert-manager) in production.
+- OIDC is used for authentication; ensure client credentials and redirect URIs are registered and rotated as appropriate.
+- Rate limiting and request size limits are configured to reduce abuse.
+
+Operational checklist for deployment:
+
+1. Provision a database with the required graph and vector capabilities (Postgres+AGE recommended) and run the SQL schema in `sql/v1` or apply equivalent schema/transformations for the chosen store.
+2. Configure secrets and TLS certs in a secure store or mounted path.
+3. Validate OIDC discovery and client credentials in a staging environment.
+4. Configure logging, monitoring, and backups for the graph database.
+
+## Tests and Quality
+
+- Unit and integration tests should be added for:
+  - `src/lib/server/ageClient.ts` graph operations (mock or test DB).
+  - `src/routes/api/upload` streaming handling and error paths.
+  - OIDC-related flows should be validated in integration tests.
+
+This repository includes `vitest` and Svelte testing tooling; extend tests before adding new ingestion logic.
 
 ## Contributing
 
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md), [Reporting Security Issues](SECURITY.md), and [Contributing Guidelines](CONTRIBUTING.md).
+- Follow `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` for PRs and code reviews.
+- Use a feature branch off of `v1.0.0` and open a PR to that branch (do not open PRs directly to `main`).
 
-## License
+## Roadmap / Suggested Features
 
-This project is licensed under multiple open source licenses. See [LICENSE-Apache.md](LICENSE-Apache.md), [LICENSE-GPL.md](LICENSE-GPL.md), and [LICENSE-MIT.md](LICENSE-MIT.md) for details.
+- Add configurable enrichment workers so enrichers can run asynchronously.
+- Add a plugin system for vendor connector transforms and signature parsers.
+- Add end-to-end tests that run against a disposable AGE-enabled Postgres instance in CI to catch schema drift.
+- Improve observability: structured logs and metrics (Prometheus) for ingestion throughput, error rates, and enrichment latency.
 
-## Tooling
+## Where to Look Next
 
-The tools we use include:
+- `server/` — Express wrapper and runtime configuration.
+- `src/lib/server/ageClient.ts` — graph client wrapper and examples of Cypher operations used by the app.
+- `src/routes/api/upload/+server.ts` — streaming upload endpoint.
+- `sql/v1` — SQL schema for the graph model.
 
-![Dependabot](https://img.shields.io/badge/dependabot-025E8C?style=for-the-badge&logo=dependabot&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
-![Linux Mint](https://img.shields.io/badge/Linux%20Mint-87CF3E?style=for-the-badge&logo=Linux%20Mint&logoColor=white)
-![VS Code](https://img.shields.io/badge/VS%20Code-0078d7.svg?style=for-the-badge&logo=visual-studio-code&logoColor=white)
-![Git](https://img.shields.io/badge/git-%23F05033.svg?style=for-the-badge&logo=git&logoColor=white)
+If you need me to: add run scripts, improve the developer quickstart, or
+generate CI steps to validate the AGE schema in CI, tell me which to do next.
 
 ---
 
-© Vanopticon. All rights reserved.
+License: see `LICENSE.md` in the repository root.
