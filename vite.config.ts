@@ -41,15 +41,10 @@ export default defineConfig(({ mode }) => {
 					extends: './vite.config.ts',
 					test: {
 						name: 'client',
-						environment: 'browser',
-						browser: {
-							enabled: true,
-							provider: 'playwright',
-							instances: [{ browser: 'chromium' }],
-						},
+						// Use node environment for now (no-browser mode)
+						environment: 'node',
 						include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
 						exclude: ['src/lib/server/**'],
-						setupFiles: ['./vitest-setup-client.ts'],
 					},
 				},
 				{

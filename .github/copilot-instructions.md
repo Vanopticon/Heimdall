@@ -114,6 +114,8 @@ This process must be followed in its entirety for all work:
 * Use the GitHub MCP for _all_ GitHub interactions. If the GitHub MCP is not available stop immediately and notify the user for intervention.
 * Use context7 MCP server for current documentatio.
 * Prefer MCP interaction over command line tooling.
+* Instead of manually fixing linting and formatting issues, use the `pnpm format` command.
+* Only run one shell command at a time; do not chain commands.
 
 ## Templates
 
