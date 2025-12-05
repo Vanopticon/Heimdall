@@ -45,11 +45,17 @@
 	"private": true,
 	"scripts": {
 		"build": "pnpm vite build",
-		"build:package": "pnpm run clean && bash ./build-package.sh",
+		"build:package": "pnpm run clean && pnpm build",
 		"build:watch": "vite build --watch",
 		"clean": "rm -rf build .build-tmp *.tar.gz",
 		"dev": "nodemon --watch src --watch static --watch server --ext ts,svelte,js,css,html --exec \"pnpm build && tsx server/server.ts\"",
-		"start": "node server/server.js"
+		"start": "node server/server.js",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:ci": "vitest run --reporter=github-actions --reporter=junit --coverage",
+		"coverage": "vitest run --coverage",
+		"format": "prettier --write \"**/*.{js,ts,tsx,css,scss,svelte,html,json}\"",
+		"format:check": "prettier --check \"**/*.{js,ts,tsx,css,scss,svelte,html,json}\""
 	},
 	"type": "module",
 	"version": "1.0.0-alpha.1"

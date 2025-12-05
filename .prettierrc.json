@@ -21,8 +21,17 @@
 				"tabWidth": 4,
 				"useTabs": true
 			}
+		},
+		{
+			"files": ["*.svelte"],
+			"options": {
+				"parser": "svelte",
+				"tabWidth": 4,
+				"useTabs": true
+			}
 		}
 	],
+	"plugins": ["prettier-plugin-svelte"],
 	"printWidth": 120,
 	"proseWrap": "preserve",
 	"quoteProps": "as-needed",

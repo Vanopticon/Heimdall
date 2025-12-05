@@ -1,52 +1,50 @@
 # Contributing
 
+Thank you for considering contributing to Heimdall. We welcome improvements, bugfixes, and documentation updates. To make collaboration smooth, please follow these guidelines.
+
 ## Modifying the code
 
-- All contributors agree to the [Developer's Certificate of Origin](DCO.md)
-- Follow the GitHub guide for [Contributing to a project](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project)
+- All contributors agree to the [Developer's Certificate of Origin](DCO.md).
+- Follow the GitHub guide for [Contributing to a project](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project).
 
-## Code Standards
+## Code standards
 
-- Follow the official style guide for your programming language
-- Write clear, documented, and testable code
-- Include comments for complex logic
-- Keep functions focused and concise
-- Write meaningful variable and function names
-- Add unit tests for new functionality
-- Ensure all tests pass before submitting
+- Follow the official style guide for the language you are changing.
+- Write clear, documented, and testable code.
+- Include comments for complex logic.
+- Keep functions focused and concise.
+- Use meaningful names for variables and functions.
+- Add unit tests for new functionality and ensure all tests pass locally.
 
-## Pull Requests
+## Pull requests
 
-- Create a branch with a descriptive name
-- Make focused, single-purpose changes
-- Include comprehensive test coverage
-- Update documentation!
-- Follow the pull request template
-- Respond to review feedback promptly
-- Rebase your branch before merging
+- Create a branch with a descriptive name.
+- Make focused, single-purpose changes.
+- Include tests for new behavior where applicable.
+- Update relevant documentation.
+- Use the pull request template and respond to review feedback promptly.
+- Rebase your branch if requested before merging.
 
 ## Issues
 
-- Check existing issues before creating new ones
-- Use issue templates when available
-- Provide clear reproduction steps for bugs
-- Include system/environment details
-- Add relevant logs or screenshots
-- Tag issues appropriately
+- Search existing issues before opening a new one.
+- Use the provided issue templates.
+- Provide clear reproduction steps for bugs, including environment details and logs if available.
+- Tag issues appropriately.
 
 ## Commits
 
-- All commits must be linked to one or more Issues or Discussions. Feel free to [open a new issue](/issues/new) if necessary
-- Write clear commit messages in the imperative mood
-- Keep commits atomic and focused
-- Sign your commits
-- Reference related issues in commit messages
+- Link commits to one or more issues or discussions when relevant. You can open a new issue at `/issues/new` if needed.
+- Write concise commit messages in the imperative mood.
+- Keep commits atomic and focused.
+- Sign your commits when required by the project.
+- Reference related issues in commit messages (e.g. `fix: something (#123)`).
 
-### Commit Message Examples
+### Commit message examples
 
 Good examples:
 
-```
+```text
 feat: add user authentication system (#123)
 fix: resolve memory leak in data processing (#456)
 docs: update API documentation for new endpoints (#789)
@@ -54,17 +52,19 @@ docs: update API documentation for new endpoints (#789)
 
 Bad examples:
 
-```
+```text
 fixed stuff
 updated code
 WIP
-quick fix for #123
 ```
 
-## Code Review
+## Code review
 
-- Be respectful and constructive
-- Review changes thoroughly
-- Test the changes locally
-- Provide specific feedback
-- Approve only when satisfied
+- Be respectful and constructive.
+- Review changes thoroughly and test them locally when possible.
+- Provide specific feedback and suggest improvements.
+- Approve changes only when satisfied that quality and tests are sufficient.
+
+---
+
+If you have questions about the contribution process, open an issue and tag it `help-wanted` or `discussion`.

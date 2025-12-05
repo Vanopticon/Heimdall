@@ -1,3 +1,50 @@
+name: "Feature request"
+description: "Suggest an idea for this project"
+title: "[Feat]: "
+labels: ["feature", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature. Please provide a short summary,
+        describe who benefits, and any implementation ideas or examples.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: A short summary of the requested feature.
+      required: true
+
+  - type: textarea
+    id: audience
+    attributes:
+      label: Target audience
+      placeholder: Who would benefit from this feature?
+      required: false
+
+  - type: textarea
+    id: benefits
+    attributes:
+      label: Benefits
+      placeholder: Describe the benefits and why this would be helpful.
+      required: true
+
+  - type: textarea
+    id: implementation_ideas
+    attributes:
+      label: Implementation ideas
+      placeholder: Any technical notes, API ideas, or references.
+      required: false
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      placeholder: Links or descriptions of similar features elsewhere.
+      required: false
 name: Feature request
 about: Suggest an idea for this project
 title: ''
