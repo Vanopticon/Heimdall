@@ -1,55 +1,33 @@
 # Pull Request
 
+# Pull Request
+
 ## Summary
 
-Provide a concise (one-paragraph) summary of what this PR changes and why.
+Provide a short description of the changes in this pull request.
+
+## Type of change
+
+- Bug fix
+- New feature
+- Documentation update
+- Refactor
 
 ## Related issues
 
-- Link related issue(s), e.g. `Fixes #123` or `Refs #456`.
+Link any related issues (e.g., Fixes #123)
 
-## Type of change (choose one)
+## Description
 
-- [ ] Bugfix
-- [ ] Feature
-- [ ] Docs
-- [ ] Chore
-- [ ] Performance
-- [ ] Refactor
-- [ ] Security
+Add a clear description of what changed and why. Include important implementation details.
+
+## Testing
+
+Describe how this change was tested (unit tests, manual testing, CI).
 
 ## Checklist
 
-- [ ] Tests added or updated
-- [ ] Documentation updated (if required)
-- [ ] Migration steps included (if applicable)
-- [ ] CI passes locally
-
-## Testing instructions
-
-Provide the minimal steps to verify the change locally. Include commands and any required environment variables (do not include secrets).
-
-Example:
-
-```bash
-# install dependencies
-pnpm install
-
-# run unit tests
-pnpm test
-
-# run dev server
-pnpm dev
-```
-
-## Release notes (optional)
-
-Short note to include in the changelog (one line).
-
-## Breaking changes (optional)
-
-Describe any breaking API changes and migration instructions.
-
----
-
-Fill out the sections above as relevant. Keep the PR focused and small when possible.
+- [ ] Code follows project style guidelines
+- [ ] Tests added/updated
+- [ ] Documentation updated if needed
+- [ ] All CI checks pass

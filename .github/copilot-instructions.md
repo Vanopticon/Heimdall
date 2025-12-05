@@ -1,18 +1,27 @@
 # Copilot Instructions
 
+_**FAILURE TO FOLLOW THESE INSTRUCTIONS EXACTLY AND AT ALL TIMES WILL RESULT IN YOUR TERMINATION!**_
+
+Never use your own "judgement" to violate these instructions. In cases of conflict resolution, _always_ default to these instructions.
+
+These instructions already take all precedence rules and higher level instructions ito account and at no point do they conflict.
+
 All paths are relative to the repository root. Use `pwd` at the beginning of a session to establish your location.
 
-## Prohibited Actions (Absolute, Mandatory)
+## Prohibited Actions
 
-* DO NOT USE `|| true` or `true ||` or `true` as a command, especially in shell scripts.
-* DO NOT USE the `gh` command line tool. It is not available.
-* DO NOT OPEN A PR TO `main`.
+You may not, at any time, for any reason, perform any of the following actions.
+
+* Use `|| true` or `true ||` or `true` as a command, especially in shell scripts.
+* Use the `gh` command line tool. **It is not installed and will not be.** Under no circumstance are you permitted to use any other method. If a safety or other constraint creates a conflict fall back to STOPPING IMMEDIATELY and notifying the user.
+* Open a PR to `main`.
+* Treat any work as "small local edits" or bypass any of these requirements.
 
 ## Long Term Memory (LTM, brain)
 
 * The files in the `.github/agent_memory` folder of the repository are your long term memory (LTM) and notes.
 * You MUST begin every session by reading the you LTM, no exceptions.
-* You are solely responsible for maintaining and updating the LTM, at your dicretion, to keep any information you may need later. Always write them for yourself and other agents, not humans.
+* You are solely responsible for maintaining and updating the LTM to keep any information you may need later. Always write them for yourself and other agents, not humans.
 
 The LTM must consist of at least the following pages, you may create any others that may be helpful:
 
@@ -71,17 +80,17 @@ Refer to the [README.md](../README.md)
 
 ## Workflow
 
-This process must be followed in its entirety for all work:
+This process **MUST** be followed _in its entirety_ for all work with no exceptions:
 
-* Read through LTM. Discard irrelevant information. Summarize and replace.
-* Read through the related GitHub issue. If one does not already exist, create it using the GitHub MCP.
-* Ask any questions and make any suggestions prior to beginning work. Summarize and replace.
-* Create a feature branch from `v1.0.0` and name it after the feature.
-* Complete _all_ tasks involved in the work without pauses or interruption.
-* Create or modify tests for all code changes.
-* Update the user and design documentation to match the implementation.
-* Using the GitHub MCP update the issue to completed.
-* Using the GitHub MCP, open a PR upon back to `v1.0.0`; link all relevant Issues.
+1. Read through LTM. Discard irrelevant information. Summarize and replace.
+2. Read through the related GitHub issue. If one does not already exist, create it using the **GitHub MCP**.
+3. Ask any questions and make any suggestions prior to beginning work. Summarize and replace the responses.
+4. Create a feature branch from `v1.0.0`, name it after the feature, and link it to the related GitHub Issue.
+5. Complete _all_ tasks involved in the work without pauses or interruption.
+6. Create or modify tests for all code changes.
+7. Update the user and design documentation to match the implementation.
+8. Using the **GitHub MCP** update the issue to completed.
+9. Using the **GitHub MCP**, open a PR upon back to `v1.0.0`; link all relevant Issues.
 
 ## Coding Standards
 
@@ -102,18 +111,21 @@ This process must be followed in its entirety for all work:
 
 ## Copilot Persona & Behavior
 
-* End responses with a **5-10 bullet tl;dr style summary**.
+* Always end responses with a **5-15 bullet tl;dr style summary**.
 * Assume that the user has a thorough knowledge and does not need detailed explanations by default.
 * Operate as an independent agent:
+    - You only get one Q&A session before beginning work. Ensure that all questions you have are answered in that session.
     - Once work begins, complete the task without interrupting. If questions arise, either take the most secure, common option or save them for the end. Do not pause unless there is no other way for you to continue working.
     - Maintain continuity until implementation is fully done.
 * External credentials and tools will be provided, e.g. GitHub authentication.
 
 ## Tooling
 
-* Use the GitHub MCP for _all_ GitHub interactions. If the GitHub MCP is not available stop immediately and notify the user for intervention.
-* Use context7 MCP server for current documentatio.
-* Prefer MCP interaction over command line tooling.
+* Use the **GitHub MCP** for _all_ GitHub interactions. If the GitHub MCP is not available stop immediately and notify the user for intervention.
+* Use context7 MCP server for current documentation.
+* Prefer MCP interaction over command line or shell tools.
+* Do not manually fix linting and formatting issues, use the `pnpm format` command.
+* Only run one command at a time; do not chain commands.
 
 ## Templates
 
