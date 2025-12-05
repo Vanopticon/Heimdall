@@ -257,7 +257,7 @@ This test script should be updated when:
 
 ## References
 
-- [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
+- [Model Context Protocol Specification](https://spec.modelcontextprotocol.io/)
 - [GitHub API Documentation](https://docs.github.com/en/rest)
 - [Playwright Documentation](https://playwright.dev/)
 
