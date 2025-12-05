@@ -1,50 +1,123 @@
-name: 'Bug report'
-about: 'Use this form to report reproducible bugs. Provide steps to reproduce and expected behavior.'
-title: '[bug] '
-labels: ['bug']
+name: Bug report
+about: Create a report to help us improve
+title: ''
+labels: ''
+assignees: ''
+
 body:
-  - type: textarea
-    id: summary
+  - type: markdown
     attributes:
-      label: 'Summary'
-      description: 'Short description of the bug.'
-      placeholder: 'A short, descriptive summary of the issue.'
+      value: |
+        Please provide a clear and concise bug report. Include steps to reproduce and expected vs actual behavior.
+
   - type: textarea
-    id: steps
+    id: description
     attributes:
-      label: 'Steps to reproduce'
-      description: 'Exact steps to reproduce the behavior. Include commands and inputs.'
-      placeholder: |
-        1. Do this
-        2. Then this
-        3. Observe the problem
+      label: Describe the bug
+      placeholder: A clear and concise description of what the bug is.
+      required: true
+
   - type: textarea
-    id: expected
+    id: steps_to_reproduce
     attributes:
-      label: 'Expected behavior'
-      description: 'What you expected to happen.'
-      placeholder: 'Describe the expected outcome.'
+      label: To Reproduce
+      placeholder: Steps to reproduce the behavior, e.g., 1. Do X 2. Do Y
+      required: true
+
   - type: textarea
-    id: actual
+    id: expected_behavior
     attributes:
-      label: 'Actual behavior'
-      description: 'What actually happened, including error messages and stack traces.'
-      placeholder: 'Describe the observed outcome, include logs/errors.'
-  - type: input
+      label: Expected behavior
+      placeholder: A clear and concise description of what you expected to happen.
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      placeholder: Add any screenshots to help explain the problem.
+      required: false
+
+  - type: textarea
     id: environment
     attributes:
-      label: 'Environment'
-      description: 'OS, runtime versions, and any relevant environment variables (do not include secrets).'
-      placeholder: 'e.g. Ubuntu 22.04, Node v20, Rust 1.70'
+      label: Environment
+      placeholder: OS, Browser, Version, Device info
+      required: false
+
   - type: textarea
-    id: additional
+    id: additional_context
     attributes:
-      label: 'Additional context'
-      description: 'Screenshots, log excerpts, or other context that may help diagnose the issue.'
-  - type: checkboxes
-    id: checklist
+      label: Additional context
+      placeholder: Add any other context about the problem here.
+      required: false
+name: Bug Report
+description: File a bug report.
+title: '[Bug]: '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
     attributes:
-      label: 'Checklist'
+      value: Please provide as much detail as possible. Attach logs, examples, and other files to this report.
+  - type: textarea
+    id: unexpected-behavior
+    attributes:
+      label: Unexpected Behavior
+      description: What happened that you did not expect?
+      placeholder: Describe what actually happened, including any error messages or unexpected results.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe what you expected the application to do.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Provide a detailed list of steps to reproduce the issue
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Application Version
+      description: What version of the application are you running?
+      placeholder: e.g., v1.2.3 or commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Operating System
+      description: What operating system are you using?
       options:
-        - label: 'I reproducible the issue in a minimal environment'
-        - label: 'I searched existing issues and PRs'
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: about
+    attributes:
+      label: About the Application
+      description: Please paste the output of the "About" dialog.
+      placeholder: About information including build details
+    validations:
+      required: true
+  - type: textarea
+    id: additional-information
+    attributes:
+      label: Additional Information
+      description: Include any logs, screenshots, or other relevant information
+      placeholder: Attach any relevant logs, screenshots, or additional context that might help diagnose the issue
