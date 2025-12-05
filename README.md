@@ -1,3 +1,4 @@
+# Heimdall — Central Ingestion, ETL & Data-Scrubbing Hub
 
 # Heimdall — Central Ingestion, ETL & Data-Scrubbing Hub
 
@@ -12,7 +13,28 @@ Heimdall (named for the keeper of the Rainbow Bridge) is the ETL, data scrubbing
 - **Correlate** entities and sightings in a graph store to enable threat
 	linkage, deduplication, and provenance tracking.
 
-## Key Features
+## Architecture Overview
+
+- **Frontend / UI**: Built with SvelteKit and shipped via the Node adapter (SSR capable). Frontend is served from the build output by the Express wrapper.
+- **Application Server**: An Express wrapper (`server/server.ts`) provides TLS, authentication support for both interactive users and machine clients (OIDC via `openid-client` for user login; OAuth2 Client Credentials for machine-to-machine integrations), session management, and serves the SvelteKit handler.
+- **Graph & vector store**: A database with graph and vector capabilities stores the Heimdall data model. Postgres+AGE is a common and recommended choice for development; when using Postgres+AGE the project uses `age-schema-client` (wrapped in `src/lib/server/ageClient.ts`) for schema-aware operations and raw Cypher fallbacks. Other graph/vector-capable stores can be used in production deployments.
+- **Pipelines & APIs**: Ingest endpoints (e.g. `src/routes/api/upload/+server.ts`) and future pipeline workers normalize and enrich incoming telemetry.
+
+Refer to `docs/design/Architecture.md` and `docs/design/DataModel.md` for diagrams and the canonical graph model.
+
+## Data Model (high level)
+
+- Graph-centered: nodes for `dumps`, `fields`, `field_value`, `ip`, `NPI_Category`, and `sightings` to capture occurrences and provenance.
+- Support for deduplication and cross-field sightings to surface linkages between otherwise separate records.
+
+See `sql/v1/001-create_graph.sql` for the authoritative schema and indices.
+
+## Getting Started (Development)
+
+Prerequisites:
+
+- Node.js (recommended LTS) and `pnpm` installed.
+- A database with graph and vector capabilities (Postgres+AGE recommended for integration tests / dev).
 
 - **Zero NPI Output**: All output has been scrubbed clean of NPI, or the NPI has been one way encoded to allow it to still be processed securely.
 - **Flexible ingestion**: HTTP APIs and upload handlers accepting raw payloads	and multipart uploads. Streaming writes avoid large memory spikes.
