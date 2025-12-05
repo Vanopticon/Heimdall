@@ -20,6 +20,12 @@ _Link to documentaton for each example in the project._
 
 _Provide an overview of getting set up as a developer and provide links to more detailed documentation, including the designs._
 
+### MCP Server Testing
+
+- [MCP Server Verification Summary](mcp-server-verification-summary.md) - Executive summary of MCP server testing
+- [MCP Server Test Results](mcp-server-tests.md) - Detailed test results for all MCP servers
+- [MCP Server Test Script](mcp-server-test-script.md) - Testing methodology and procedures
+
 ## API Documentation
 
 _If the project exposes an API provide an overview of it here and link to detailed (Swagger) documentation. If not, remove this section._
