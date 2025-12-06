@@ -78,10 +78,10 @@ Quick dev run (local, minimal):
 pnpm install
 pnpm build
 # Run the server (reads TLS cert and key from env, or place certs locally)
-NODE_ENV=development VOH_HOST=127.0.0.1 VOH_PORT=443 \
-	VOH_TLS_KEY=/path/to/tls.key VOH_TLS_CERT=/path/to/tls.crt \
-	VOH_OAUTH_DISCOVERY_URL="https://example/.well-known/openid-configuration" \
-	VOH_OAUTH_AUTH_ID=client_id VOH_OAUTH_AUTH_SECRET=client_secret \
+NODE_ENV=development HMD_HOST=127.0.0.1 HMD_PORT=443 \
+	HMD_TLS_KEY=/path/to/tls.key HMD_TLS_CERT=/path/to/tls.crt \
+	HMD_OAUTH_DISCOVERY_URL="https://example/.well-known/openid-configuration" \
+	HMD_OAUTH_AUTH_ID=client_id HMD_OAUTH_AUTH_SECRET=client_secret \
 	pnpm dev
 ```
 
@@ -90,17 +90,17 @@ Notes:
 - `server/server.ts` enforces a set of required environment variables. At
 	startup the server will validate that the OIDC discovery URL is reachable
 	and will exit on misconfiguration.
-- Database connectivity is taken from `VOH_DATABASE_URL` or the normal
+- Database connectivity is taken from `HMD_DATABASE_URL` or the normal
 	`PG*` environment variables and falls back to sane defaults in the code but
 	should be configured for production.
 
 ## Configuration (important environment variables)
 
-- `VOH_HOST`, `VOH_PORT` — host and port the server binds to.
-- `VOH_TLS_KEY`, `VOH_TLS_CERT` — TLS key and certificate paths (required).
--- `VOH_OAUTH_DISCOVERY_URL`, `VOH_OAUTH_AUTH_ID`, `VOH_OAUTH_AUTH_SECRET`,
-	`VOH_OAUTH_SCOPES` — OIDC configuration used for interactive user login (browser-based login flows). Machine-to-machine (service-to-service) integrations should use the OAuth2 Client Credentials (client credentials) flow and obtain bearer tokens from your identity provider; client credentials and service tokens should be managed securely by your deployment/secret management solution.
-- `VOH_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` —
+- `HMD_HOST`, `HMD_PORT` — host and port the server binds to.
+- `HMD_TLS_KEY`, `HMD_TLS_CERT` — TLS key and certificate paths (required).
+-- `HMD_OAUTH_DISCOVERY_URL`, `HMD_OAUTH_AUTH_ID`, `HMD_OAUTH_AUTH_SECRET`,
+	`HMD_OAUTH_SCOPES` — OIDC configuration used for interactive user login (browser-based login flows). Machine-to-machine (service-to-service) integrations should use the OAuth2 Client Credentials (client credentials) flow and obtain bearer tokens from your identity provider; client credentials and service tokens should be managed securely by your deployment/secret management solution.
+- `HMD_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` —
 	database connection information.
 - `AGE_GRAPH` — logical graph name inside the AGE-enabled database.
 

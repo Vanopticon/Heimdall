@@ -17,6 +17,14 @@ You may not, at any time, for any reason, perform any of the following actions.
 * Open a PR to `main`.
 * Treat any work as "small local edits" or bypass any of these requirements.
 
+## Confidential Information
+
+The following, in addition to many of the normal items, are considered Confidential and may not be exposed, especially in logs:
+
+* User IDs, including those used for login
+* Access Tokens of any type
+* Technical data about the software, platform, Operating System, etc.
+
 ## Long Term Memory (LTM, brain)
 
 * The files in the `.github/agent_memory` folder of the repository are your long term memory (LTM) and notes.

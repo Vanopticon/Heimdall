@@ -12,17 +12,17 @@ import morgan from 'morgan';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
 import session from 'express-session';
+import os from 'os';
 
 // ===== Environment Variable Checks =====
 const requiredEnv = [
-	'VOH_HOST',
-	'VOH_PORT',
-	'VOH_TLS_KEY',
-	'VOH_TLS_CERT',
-	'VOH_OAUTH_DISCOVERY_URL',
-	'VOH_OAUTH_AUTH_ID',
-	'VOH_OAUTH_AUTH_SECRET',
-	'VOH_OAUTH_SCOPES',
+	'HMD_OAUTH_DISCOVERY_URL',
+	'HMD_OAUTH_H2M_ID',
+	'HMD_OAUTH_H2M_SECRET',
+	'HMD_OAUTH_M2M_ID',
+	'HMD_OAUTH_M2M_SECRET',
+	'HMD_TLS_CERT',
+	'HMD_TLS_KEY',
 ];
 const missingEnv = requiredEnv.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {
@@ -30,17 +30,50 @@ if (missingEnv.length > 0) {
 	process.exit(1);
 }
 
+// ===== Load Configuration =====
+const config = {
+	host: process.env.HMD_HOST || os.hostname(),
+	port: process.env.HMD_PORT ? parseInt(process.env.HMD_PORT) : 443,
+	tls_key: fs.readFileSync(process.env.HMD_TLS_KEY || '/etc/tls/tls.key'),
+	tls_cert: fs.readFileSync(process.env.HMD_TLS_CERT || '/etc/tls/tls.crt'),
+	oauth_discovery_url: process.env.HMD_OAUTH_DISCOVERY_URL!,
+	oauth_h2m_id: process.env.HMD_OAUTH_H2M_ID!,
+	oauth_h2m_secret: process.env.HMD_H2M_AUTH_SECRET!,
+	OIDC_Scope: process.env.HMD_OIDC_SCOPE || 'openid profile email',
+	oauth_m2m_id: process.env.HMD_OAUTH_M2M_ID!,
+	oauth_m2m_secret: process.env.HMD_OAUTH_M2M_SECRET!,
+	session_secret: crypto.randomBytes(64).toString('hex'),
+	cookie_secret: process.env.HMD_COOKIE_SECRET || crypto.randomBytes(32).toString('hex'),
+};
+
+// If we generated a cookie secret at startup, also expose it on process.env
+// so SvelteKit server-side loads (which run in the same process) can
+// access it via `process.env.HMD_COOKIE_SECRET` when decrypting the cookie.
+if (!process.env.HMD_COOKIE_SECRET) {
+	process.env.HMD_COOKIE_SECRET = config.cookie_secret;
+}
+process.env['COOKIE_SECRET'] = config.cookie_secret;
+
+// Helper: encrypt JSON using AES-256-GCM with a server secret
+function encryptForCookie(obj: unknown) {
+	const secret = config.cookie_secret;
+	const key = crypto.createHash('sha256').update(secret).digest();
+	const iv = crypto.randomBytes(12);
+	const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+	const plaintext = Buffer.from(JSON.stringify(obj), 'utf8');
+	const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+	const tag = cipher.getAuthTag();
+	// store iv + tag + ciphertext
+	return Buffer.concat([iv, tag, ciphertext]).toString('base64');
+}
+
 // ===== Express App Setup =====
 const app = express();
 
-const sessionSecret =
-	process.env.NODE_ENV === 'development' ?
-		'8675309deadbeefcafe11223344556677889900aabbccddeeff001122334455667788'
-	:	crypto.randomBytes(64).toString('hex');
-
+// ===== Session Management =====
 app.use(
 	session({
-		secret: sessionSecret,
+		secret: config.session_secret,
 		resave: false,
 		saveUninitialized: false,
 		cookie: {
@@ -68,17 +101,25 @@ declare global {
 }
 
 // ===== OIDC Setup =====
-let oidcClient: any;
+let oidcH2MClient: openidClient.Configuration | undefined = undefined;
+let oidcM2MClient: openidClient.Configuration | undefined = undefined;
 let oidcReady = false;
-const callbackUrl = `https://${process.env.VOH_HOST}:${process.env.VOH_PORT}/auth/callback`;
+const callbackUrl = `https://${config.host}:${config.port}/auth/callback`;
 (async () => {
 	try {
-		const oidcIssuer = await openidClient.discovery(
-			new URL(process.env.VOH_OAUTH_DISCOVERY_URL!),
-			process.env.VOH_OAUTH_AUTH_ID!,
-			process.env.VOH_OAUTH_AUTH_SECRET!,
+		const oidcM2MIssuer = await openidClient.discovery(
+			new URL(config.oauth_discovery_url),
+			config.oauth_m2m_id,
+			config.oauth_m2m_secret,
 		);
-		oidcClient = oidcIssuer;
+		oidcM2MClient = oidcM2MIssuer;
+
+		const oidcH2MIssuer = await openidClient.discovery(
+			new URL(config.oauth_discovery_url),
+			config.oauth_h2m_id,
+			config.oauth_h2m_secret,
+		);
+		oidcH2MClient = oidcH2MIssuer;
 		oidcReady = true;
 	} catch (err) {
 		console.error('OIDC discovery failed:', err);
@@ -86,6 +127,7 @@ const callbackUrl = `https://${process.env.VOH_HOST}:${process.env.VOH_PORT}/aut
 	}
 })();
 
+// ===== Check and Force authorization =====
 app.use((req, res, next) => {
 	req.isAuthenticated = function () {
 		return !!req.session?.user;
@@ -93,15 +135,16 @@ app.use((req, res, next) => {
 	next();
 });
 
+// ===== OIDC Authentication Routes =====
 app.get('/auth/login', (req, res) => {
 	if (!oidcReady) return res.status(503).send('OIDC not ready');
-	// PKCE code_verifier and code_challenge
+
 	const code_verifier = openidClient.randomPKCECodeVerifier();
 	openidClient.calculatePKCECodeChallenge(code_verifier).then((code_challenge) => {
 		req.session.code_verifier = code_verifier;
-		const url = openidClient.buildAuthorizationUrl(oidcClient, {
+		const url = openidClient.buildAuthorizationUrl(oidcH2MClient!, {
 			redirect_uri: callbackUrl,
-			scope: process.env.VOH_OAUTH_SCOPES || 'openid profile email',
+			scope: config.OIDC_Scope,
 			response_mode: 'query',
 			code_challenge,
 			code_challenge_method: 'S256',
@@ -110,23 +153,25 @@ app.get('/auth/login', (req, res) => {
 	});
 });
 
+// ===== OIDC Callback Route =====
 app.get('/auth/callback', async (req, res, next) => {
 	if (!oidcReady) return res.status(503).send('OIDC not ready');
 	try {
 		const params = req.query;
-		// Use PKCE code_verifier from session
-		const tokenSet = await openidClient.authorizationCodeGrant(oidcClient, new URL(req.originalUrl, callbackUrl), {
-			pkceCodeVerifier: req.session.code_verifier,
-		});
-		// Remove code_verifier from session after use
+		const tokenSet = await openidClient.authorizationCodeGrant(
+			oidcH2MClient!,
+			new URL(req.originalUrl, callbackUrl),
+			{
+				pkceCodeVerifier: req.session.code_verifier,
+			},
+		);
 		delete req.session.code_verifier;
-		// Validate ID token and userinfo
 		if (!tokenSet.id_token) {
 			throw new Error('No ID token returned');
 		}
-		// Fetch userinfo manually
-		const userinfoEndpoint = oidcClient.serverMetadata().userinfo_endpoint;
-		const userinfoResponse = await fetch(userinfoEndpoint, {
+
+		const userinfoEndpoint = oidcH2MClient!.serverMetadata().userinfo_endpoint;
+		const userinfoResponse = await fetch(userinfoEndpoint!, {
 			method: 'GET',
 			headers: {
 				Authorization: `Bearer ${tokenSet.access_token}`,
@@ -140,10 +185,24 @@ app.get('/auth/callback', async (req, res, next) => {
 		if (!userinfo || !userinfo.sub) {
 			throw new Error('Invalid userinfo');
 		}
-		req.session.regenerate((err) => {
+		req.session.regenerate((err: any) => {
 			if (err) return next(err);
 			req.session.user = userinfo;
-			// Always redirect to root after login
+
+			// Encrypt and set full user JSON in an HttpOnly cookie.
+			try {
+				const token = encryptForCookie(userinfo);
+				res.cookie('hmd_user', token, {
+					httpOnly: true,
+					secure: true,
+					sameSite: 'none',
+					maxAge: 24 * 60 * 60 * 1000,
+					path: '/',
+				});
+			} catch (e) {
+				console.error('Failed to set encrypted hmd_user cookie:', e);
+			}
+
 			res.redirect('/');
 		});
 	} catch (err) {
@@ -169,12 +228,14 @@ app.get('/auth/callback', async (req, res, next) => {
 	}
 });
 
+// ===== Logout Route =====
 app.get('/auth/logout', (req, res) => {
 	req.session.destroy((err) => {
 		if (err) {
 			console.error('Session destruction error:', err);
 		}
 		res.clearCookie('connect.sid');
+		res.clearCookie('hmd_user');
 		res.redirect('/');
 	});
 });
@@ -185,8 +246,7 @@ app.use((req, res, next) => {
 		req.path.startsWith('/auth') ||
 		req.path.startsWith('/robots.txt') ||
 		req.path.startsWith('/static') ||
-		req.path.startsWith('/fonts') ||
-		req.path.startsWith('/images')
+		req.path.startsWith('/fonts')
 	) {
 		return next();
 	}
@@ -195,10 +255,11 @@ app.use((req, res, next) => {
 	}
 	next();
 });
-// ===== Disable X-Powered-By Header =====
+
+// ===== Hardening: Disable X-Powered-By Header =====
 app.disable('x-powered-by');
 
-// ===== Security: Helmet =====
+// ===== Hardening: Helmet =====
 app.use(
 	helmet({
 		contentSecurityPolicy: {
@@ -206,9 +267,9 @@ app.use(
 			directives: {
 				defaultSrc: ["'self'"],
 				scriptSrc: ["'self'"],
-				styleSrc: ["'self'", "'unsafe-inline'"],
+				styleSrc: ["'self'"],
 				imgSrc: ["'self'", 'data:'],
-				connectSrc: ["'self'", process.env.VOH_HOST || 'https://127.0.0.1'],
+				connectSrc: ["'self'", config.host],
 				frameAncestors: ["'none'"],
 			},
 		},
@@ -217,7 +278,7 @@ app.use(
 		crossOriginEmbedderPolicy: true,
 		crossOriginOpenerPolicy: { policy: 'same-origin' },
 		hsts: {
-			maxAge: 63072000,
+			maxAge: 60 * 60 * 24,
 			includeSubDomains: true,
 			preload: true,
 		},
@@ -227,13 +288,10 @@ app.use(
 // ===== Compression =====
 app.use(compression());
 
-// ===== Logging to stdout/stderr =====
-app.use(morgan('combined'));
-
-// ===== CORS =====
+// ===== Hardening: CORS =====
 app.use(
 	cors({
-		origin: [process.env.VOH_HOST || 'https://127.0.0.1'],
+		origin: [`https://${config.host}:${config.port}`],
 		methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 		allowedHeaders: ['Content-Type', 'Authorization'],
 		credentials: true,
@@ -241,21 +299,21 @@ app.use(
 	}),
 );
 
-// ===== Request Size Limits =====
+// ===== Hardening: Request Size Limits =====
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// ===== Rate Limiting =====
+// ===== Hardening: Rate Limiting =====
 app.use(
 	rateLimit({
-		windowMs: 15 * 60 * 1000,
-		max: 100,
+		windowMs: 15 * 60 * 1000, // 15 minute window
+		max: 100 * 15 * 60 * 1000, // 100 requests per minute
 		standardHeaders: true,
 		legacyHeaders: false,
 	}),
 );
 
-// ===== No Cache =====
+// ===== Disable Caching =====
 app.use((req, res, next) => {
 	res.set('Cache-Control', 'no-store');
 	res.set('Pragma', 'no-cache');
@@ -269,26 +327,20 @@ app.set('etag', false);
 app.use(
 	'/',
 	express.static(path.join(process.cwd(), 'build/client'), {
-		maxAge: '1y',
+		maxAge: '1m',
 		immutable: true,
 	}),
 );
 
 // ===== SvelteKit SSR Handler =====
+// SvelteKit handler: server-side loads will read the `hmd_user` cookie
+// set after successful login. Do not expose full userinfo in headers.
 app.use(handler);
 
 // ===== HTTPS Server with TLS 1.3 =====
-const keyPath = process.env.VOH_TLS_KEY || '/etc/tls/tls.key';
-const certPath = process.env.VOH_TLS_CERT || '/etc/tls/tls.crt';
-const key = fs.readFileSync(keyPath);
-const cert = fs.readFileSync(certPath);
-
-const host = process.env.VOH_HOST || '127.0.0.1';
-const port = process.env.VOH_PORT ? parseInt(process.env.VOH_PORT) : 443;
-
 const tlsOptions: https.ServerOptions = {
-	key,
-	cert,
+	key: config.tls_key,
+	cert: config.tls_cert,
 	minVersion: 'TLSv1.3',
 	requestCert: false,
 	rejectUnauthorized: true,
@@ -296,11 +348,12 @@ const tlsOptions: https.ServerOptions = {
 	ecdhCurve: 'X25519:P-256:P-384:P-521',
 };
 
-https.createServer(tlsOptions, app).listen(port, host, () => {
-	console.log(`VOH server running with TLS 1.3 on ${host}:${port}`);
+// ===== Start HTTPS Server =====
+https.createServer(tlsOptions, app).listen(config.port, config.host, () => {
+	console.log(`Heimdall server running with TLS 1.3 on ${config.host}:${config.port}`);
 });
 
-// ===== Basic Error Handler =====
+// ===== General Error Handler =====
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
 	console.error(err instanceof Error ? err.stack : err);
 	res.status(500).send('Internal Server Error');

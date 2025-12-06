@@ -6,10 +6,10 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), '');
 
-	const host = env['VOH_HOST'] || 'localhost';
-	const port = parseInt(env['VOH_PORT'] || '9120');
-	const tls_key = env['VOH_TLS_KEY'] || '/etc/tls/tls.key';
-	const tls_cert = env['VOH_TLS_CERT'] || '/etc/tls/tls.crt';
+	const host = env['HMD_HOST'] || 'localhost';
+	const port = parseInt(env['HMD_PORT'] || '9120');
+	const tls_key = env['HMD_TLS_KEY'] || '/etc/tls/tls.key';
+	const tls_cert = env['HMD_TLS_CERT'] || '/etc/tls/tls.crt';
 
 	return {
 		plugins: [tailwindcss(), sveltekit()],

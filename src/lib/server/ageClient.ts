@@ -156,14 +156,14 @@ type InternalClient = {
 
 let client: InternalClient | null = null;
 
-// Prefer VOH_DATABASE_URL; fall back to other common env names.
+// Prefer HMD_DATABASE_URL; fall back to other common env names.
 const CONNECTION_URL =
-	process.env['VOH_DATABASE_URL'] || process.env['DATABASE_URL'] || process.env['PG_CONNECTION_STRING'] || '';
+	process.env['HMD_DATABASE_URL'] || process.env['DATABASE_URL'] || process.env['PG_CONNECTION_STRING'] || '';
 
 export async function initAgeClient(cfg?: Partial<Config>) {
 	const config = { ...DEFAULT_CONFIG, ...(cfg || {}) };
 
-	// Build PgConnectionConfig either from VOH_DATABASE_URL or explicit parts
+	// Build PgConnectionConfig either from HMD_DATABASE_URL or explicit parts
 	let connConfig: any = null;
 	if (CONNECTION_URL) {
 		try {

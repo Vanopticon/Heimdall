@@ -19,7 +19,7 @@ Primary components:
 Acceptance / operational notes:
 
 - Uses OIDC for authentication (`openid-client`) and enforces TLS 1.3 in `server/server.ts`.
-- Database connection comes from environment variables (supports `VOH_DATABASE_URL` / `DATABASE_URL`).
+- Database connection comes from environment variables (supports `HMD_DATABASE_URL` / `DATABASE_URL`).
 - Private repository package; `pnpm` + Node toolchain expected for development.
 
 Reference files: `README.md`, `docs/design/Architecture.md`, `docs/design/DataModel.md`, `server/server.ts`, `src/lib/server/ageClient.ts`.

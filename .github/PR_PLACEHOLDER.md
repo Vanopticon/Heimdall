@@ -1,1 +1,0 @@
-chore: update .github/copilot-instructions.md — clarify gh ban and MCP stop behavior

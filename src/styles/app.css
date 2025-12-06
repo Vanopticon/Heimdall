@@ -1,26 +1,27 @@
 @import 'tailwindcss';
+@import './app.theme.css';
 
 :root {
-	font-size: 16px;
-	line-height: 1.2;
-	font-family: 'Noto Sans', Verdana, Geneva, Tahoma, sans-serif;
+	--font-sans: 'Noto Sans', Roboto, Arial, Verdana, Tahoma, 'Trebuchet MS', sans-serif;
+	--font-serif: 'Noto Serif', 'Times New Roman', Georgia, Garamond, serif;
+	--font-heading: Antonio, 'Times New Roman', Georgia, Garamond, serif;
+	--font-mono: 'Noto Sans Mono', 'Courier New', Courier, monospace;
+	font-family: var(--font-sans);
 }
 
-body {
-	@apply bg-black text-slate-200;
-}
-
+/* Headings and links */
 h1,
 h2,
 h3,
 h4,
 h5,
 h6 {
-	font-family: 'Antonio', Georgia, 'Times New Roman', Times, serif;
-	font-weight: bold;
+	/* Headings use the primary brand color */
+	@apply font-bold;
+	@apply mt-1 mb-1;
 	line-height: 1;
+	font-family: var(--font-heading);
 }
-
 h1 {
 	font-size: 2.4rem;
 }
@@ -38,4 +39,8 @@ h5 {
 }
 h6 {
 	font-size: 1.4rem;
+}
+
+.panel h2 {
+	font-size: 1.6rem;
 }
