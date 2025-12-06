@@ -1,0 +1,104 @@
+:root {
+	@media (prefers-color-scheme: light) {
+		/* General Background */
+		--bg: var(--color-white);
+
+		/* Surfaces and Panels */
+		--primary: var(--color-blue-400);
+		--primary-variant: var(--color-indigo-400);
+		--primary-text: var(--color-amber-900);
+		--accent: var(--color-indigo-400);
+		--accent-variant: var(--color-violet-400);
+		--accent-text: var(--color-yellow-900);
+		--surface: var(--color-white);
+		--surface-text: var(--color-slate-950);
+
+		/* Dialogs and Status Indicators */
+		--info: var(--accent);
+		--info-text: var(--accent-text);
+		--warn: var(--color-amber-400);
+		--warn-text: var(--color-blue-950);
+		--error: var(--color-red-400);
+		--error-text: var(--color-black);
+
+		/* Actions */
+		--positive-action: var(--color-green-400);
+		--positive-action-text: var(--color-violet-900);
+		--destructive-action: var(--color-pink-400);
+		--destructive-action-text: var(--color-cyan-900);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		/* General Background */
+		--bg: var(--color-black);
+
+		/* Surfaces and Panels */
+		--primary: var(--color-blue-900);
+		--primary-variant: var(--color-indigo-900);
+		--primary-text: var(--color-amber-200);
+		--accent: var(--color-indigo-900);
+		--accent-variant: var(--color-violet-900);
+		--accent-text: var(--color-yellow-200);
+		--surface: var(--color-black);
+		--surface-text: var(--color-slate-50);
+
+		/* Dialogs and Status Indicators */
+		--info: var(--accent);
+		--info-text: var(--accent-text);
+		--warn: var(--color-amber-900);
+		--warn-text: var(--color-blue-50);
+		--error: var(--color-red-900);
+		--error-text: var(--color-white);
+
+		/* Actions */
+		--positive-action: var(--color-green-900);
+		--positive-action-text: var(--color-violet-200);
+		--destructive-action: var(--color-pink-950);
+		--destructive-action-text: var(--color-cyan-200);
+	}
+}
+
+.bg {
+	background-color: var(--bg);
+	color: var(--surface-text);
+}
+.primary {
+	background-color: var(--primary);
+	color: var(--primary-text);
+}
+.primary-variant {
+	background-color: var(--primary-variant);
+	color: var(--primary-text);
+}
+.accent {
+	background-color: var(--accent);
+	color: var(--accent-text);
+}
+.accent-variant {
+	background-color: var(--accent-variant);
+	color: var(--accent-text);
+}
+.surface {
+	background-color: var(--surface);
+	color: var(--surface-text);
+}
+.info {
+	background-color: var(--info);
+	color: var(--info-text);
+}
+.warning {
+	background-color: var(--warn);
+	color: var(--warn-text);
+}
+.error {
+	background-color: var(--error);
+	color: var(--error-text);
+}
+.positive-action {
+	background-color: var(--positive-action);
+	color: var(--positive-action-text);
+}
+.destructive-action {
+	background-color: var(--destructive-action);
+	color: var(--destructive-action-text);
+}
