@@ -1,0 +1,16 @@
+{
+	"category": "functional",
+	"description": "Bulk dump streaming ingest: normalize, scrub PII, generate canonical keys, and idempotently persist telemetry dumps into Postgres+AGE.",
+	"steps": [
+		"Define canonical schema for `dump`, `field`, `field_value`, `sighting`, and `entity`.",
+		"Implement streaming upload endpoint with incremental parsing and explicit format-detection (CSV/TSV/Excel/NDJSON/compressed archives).",
+		"Implement staging and record-streaming infrastructure with backpressure and bounded buffers.",
+		"Implement normalizers, canonical-key generation, and local deduplication.",
+		"Integrate the PII policy enforcement module (redact/hash/transform actions) and add a pre/post persistence validation sweep.",
+		"Implement enrichment hooks that can run synchronously or asynchronously and preserve provenance.",
+		"Implement idempotent merge operations for the Postgres+AGE graph (MERGE-style Cypher or upserts) with batching and retries.",
+		"Add unit + integration tests for format detection, streaming parsing, normalization, PII enforcement, and idempotent writes (including malformed and large inputs).",
+		"Add observability: ingest metrics, memory footprints, and a human-readable ingest report."
+	],
+	"passes": false
+}

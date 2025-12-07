@@ -1,24 +1,28 @@
 ### Project-specific
 # Add files and directories specific to this project that should be ignored below.
-# Build output and install artifacts
-build/
-dist/
-.svelte-kit/
-node_modules/
+# Rust / Cargo
+# Ignore cargo build output and generated artifacts (workspace-safe globs)
+target/**/
+**/target/**
+
+# Compiled artifacts
+*.rlib
+*.rmeta
+*.so
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.lib
+
+# Optional: ignore lockfile if you prefer not to commit it (remove if you track Cargo.lock)
+Cargo.lock
 
 ### Package manager
-# pnpm
-pnpm-lock.yaml
-node_modules/
+# Cargo registry and git cache
+.cargo/registry/
+.cargo/git/
 
-### Node
-# dotenv and env files (allow example files)
-.env
-.env.*
-!.env.example
-# npm and yarn
-package-lock.json
-yarn.lock
 
 ### Editor and IDE
 # VS Code
@@ -160,3 +164,8 @@ id_ed25519
 
 ### Misc
 *.orig
+
+
+# Added by cargo
+
+/target

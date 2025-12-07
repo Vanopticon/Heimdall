@@ -1,0 +1,11 @@
+{
+	"category": "functional",
+	"description": "Observability and testing: structured logs, Prometheus metrics, OpenTelemetry traces, and test harnesses for integration/e2e.",
+	"steps": [
+		"Add structured logging and basic metrics in core modules.",
+		"Instrument critical code paths with tracing spans.",
+		"Create test harness that spins up ephemeral Postgres+AGE containers for integration tests (via docker-compose or testcontainers).",
+		"Implement e2e scenarios for ingestion → enrichment → sync."
+	],
+	"passes": false
+}
