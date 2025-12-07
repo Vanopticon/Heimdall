@@ -1,76 +1,66 @@
 use anyhow::Result;
+use hostname;
+use log::Level;
 use serde::Deserialize;
+use thiserror::Error;
+use url::Url;
 
 /// Runtime configuration for Heimdall.
 ///
-/// Values are loaded from (in order): `config` file (optional) and environment variables
+/// Values are loaded from (in order): a config file - in the `/etc/vanopticon/heimdall.json` file,
+/// and in the user config folder (optional), and environment variables
 /// prefixed with `HMD_` (e.g. `HMD_PORT`). This is a small, intentionally conservative
 /// bootstrap for the project's configuration system.
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
+#[serde(default)]
 pub struct Settings {
 	pub host: String,
 	pub port: u16,
-	pub database_url: Option<String>,
-	pub tls_cert: Option<String>,
-	pub tls_key: Option<String>,
-	pub log_level: Option<String>,
+	pub database_url: Url,
+	pub tls_cert: String,
+	pub tls_key: String,
+	pub log_level: Level,
 }
 
 impl Default for Settings {
 	fn default() -> Self {
+		let host = hostname::get()
+			.ok()
+			.and_then(|s| s.into_string().ok())
+			.unwrap();
+
 		Self {
-			host: "127.0.0.1".to_string(),
+			host,
 			port: 443,
-			database_url: None,
-			tls_cert: None,
-			tls_key: None,
-			log_level: Some("info".to_string()),
+			database_url: Url::parse("postgresql://heimdall:heimdall@rainbowbridge/heimdall1")
+				.unwrap(),
+			tls_cert: "/etc/tls/tls.crt".to_string(),
+			tls_key: "/etc/tls/tls.key".to_string(),
+			log_level: Level::Info,
 		}
 	}
 }
 
-/// Partial settings used to overlay environment/file values on top of defaults.
-#[derive(Debug, Deserialize)]
-struct PartialSettings {
-	host: Option<String>,
-	port: Option<u16>,
-	database_url: Option<String>,
-	tls_cert: Option<String>,
-	tls_key: Option<String>,
-	log_level: Option<String>,
-}
-
 /// Load settings from config file (optional) and environment variables.
-pub fn load() -> Result<Settings> {
-	let builder = config::Config::builder()
-		.add_source(config::File::with_name("config").required(false))
-		// Use a double-underscore separator so single-underscore env names like
-		// `HMD_DATABASE_URL` map to `database_url` instead of nested `database.url`.
-		.add_source(config::Environment::with_prefix("HMD").separator("__"));
+pub fn load() -> Result<Settings, SettingsError> {
+	let mut builder = config::Config::builder()
+		.add_source(config::File::with_name("/etc/vanopticon/heimdall.json").required(false));
+
+	if let Some(folder) = dirs::config_dir() {
+		let user_config_path = folder.join("vanopticon").join("heimdall.json");
+		builder = builder.add_source(config::File::from(user_config_path).required(false));
+	}
+	if let Some(folder) = dirs::config_local_dir() {
+		let local_config_path = folder.join("vanopticon").join("heimdall.json");
+		builder = builder.add_source(config::File::from(local_config_path).required(false));
+	}
+
+	builder = builder.add_source(config::Environment::with_prefix("HMD").separator("__"));
 
 	let cfg = builder.build()?;
 
-	let partial: PartialSettings = cfg.try_deserialize()?;
+	let mut s: Settings = cfg.try_deserialize()?;
 
-	let mut s = Settings::default();
-	if let Some(host) = partial.host {
-		s.host = host;
-	}
-	if let Some(port) = partial.port {
-		s.port = port;
-	}
-	if let Some(db) = partial.database_url {
-		s.database_url = Some(db);
-	}
-	if let Some(cert) = partial.tls_cert {
-		s.tls_cert = Some(cert);
-	}
-	if let Some(key) = partial.tls_key {
-		s.tls_key = Some(key);
-	}
-	if let Some(level) = partial.log_level {
-		s.log_level = Some(level);
-	}
 	// Explicitly prefer direct environment variables when present. Some
 	// environments (CI, test harnesses) may set env vars in ways that the
 	// `config` crate doesn't map as expected; read them directly to ensure
@@ -87,32 +77,45 @@ pub fn load() -> Result<Settings> {
 	}
 	if let Ok(db) = std::env::var("HMD_DATABASE_URL") {
 		if !db.is_empty() {
-			s.database_url = Some(db);
+			if let Ok(parsed) = Url::parse(&db) {
+				s.database_url = parsed;
+			}
 		}
 	}
 	if let Ok(c) = std::env::var("HMD_TLS_CERT") {
 		if !c.is_empty() {
-			s.tls_cert = Some(c);
+			s.tls_cert = c;
 		}
 	}
 	if let Ok(k) = std::env::var("HMD_TLS_KEY") {
 		if !k.is_empty() {
-			s.tls_key = Some(k);
+			s.tls_key = k;
 		}
 	}
 	if let Ok(l) = std::env::var("HMD_LOG_LEVEL") {
 		if !l.is_empty() {
-			s.log_level = Some(l);
+			if let Ok(parsed) = l.parse::<Level>() {
+				s.log_level = parsed;
+			}
 		}
 	}
 
 	Ok(s)
 }
 
+#[derive(Debug, Error)]
+pub enum SettingsError {
+	#[error("configuration error: {0}")]
+	Config(#[from] config::ConfigError),
+}
+#[cfg(test)]
 #[cfg(feature = "unit-tests")]
 mod tests {
-	use super::*;
 	use std::env;
+
+	use log::Level;
+
+	use crate::config::{Settings, load};
 
 	#[test]
 	fn test_load_defaults_and_env_overlay() {
@@ -150,12 +153,12 @@ mod tests {
 		assert_eq!(s2.host, "0.0.0.0");
 		assert_eq!(s2.port, 8080u16);
 		assert_eq!(
-			s2.database_url.as_deref(),
-			Some("postgres://user:pass@localhost/db")
+			s2.database_url.as_str(),
+			"postgres://user:pass@localhost/db"
 		);
-		assert_eq!(s2.tls_cert.as_deref(), Some("/tmp/cert.pem"));
-		assert_eq!(s2.tls_key.as_deref(), Some("/tmp/key.pem"));
-		assert_eq!(s2.log_level.as_deref(), Some("debug"));
+		assert_eq!(s2.tls_cert, "/tmp/cert.pem");
+		assert_eq!(s2.tls_key, "/tmp/key.pem");
+		assert_eq!(s2.log_level, Level::Debug);
 
 		// restore originals
 		match orig_host {

@@ -1,6 +1,7 @@
 version: '3.8'
 services:
   db:
+    hostname: rainbow_bridge
     build:
       context: ./docker/postgres-age
       dockerfile: Dockerfile

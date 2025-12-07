@@ -1,5 +1,6 @@
 use axum::body::to_bytes;
 use axum::{body::Body, http::Request, http::StatusCode, response::IntoResponse};
+use futures_util::StreamExt;
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs::File as TokioFile;
@@ -9,33 +10,74 @@ use tokio::io::AsyncWriteExt;
 /// buffering the entire payload in memory. It reads body chunks, splits them
 /// on newlines, and normalizes each line as it arrives.
 pub async fn ndjson_upload(req: Request<Body>) -> impl IntoResponse {
-	// For simplicity (and broad compatibility) read the entire body into bytes
-	// and then process it. For very large dumps a streaming writer should be
-	// implemented instead to avoid high memory usage.
-	let bytes = match to_bytes(req.into_body(), usize::MAX).await {
-		Ok(b) => b,
-		Err(e) => {
-			return (
-				StatusCode::BAD_REQUEST,
-				format!("failed to read request body: {}", e),
-			)
-				.into_response();
-		}
-	};
+	// Stream the request body and process NDJSON line-by-line to avoid
+	// buffering very large payloads in memory. We collect complete lines
+	// by scanning for '\n' in the incoming byte stream and hand each line
+	// to the permissive normalizer.
 
-	let s = String::from_utf8_lossy(&bytes).to_string();
-	match crate::ingest::normalize_ndjson(&s) {
-		Ok(records) => match serde_json::to_string(&records) {
-			Ok(body) => (StatusCode::OK, body).into_response(),
-			Err(e) => (
-				StatusCode::INTERNAL_SERVER_ERROR,
-				format!("failed to serialize response: {}", e),
-			)
-				.into_response(),
-		},
+	use regex::Regex;
+
+	let mut stream = req.into_body().into_data_stream();
+	let mut buf: Vec<u8> = Vec::new();
+	let mut records: Vec<crate::ingest::NormalizedRecord> = Vec::new();
+	let punct_re = Regex::new(r"^[\W_]+|[\W_]+$").unwrap();
+
+	while let Some(chunk_res) = stream.next().await {
+		match chunk_res {
+			Ok(bytes_chunk) => {
+				let chunk = bytes_chunk.as_ref();
+				buf.extend_from_slice(chunk);
+
+				// Extract complete lines (terminated by '\n') and normalize each.
+				while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
+					let mut line_bytes = buf.drain(..=pos).collect::<Vec<u8>>();
+					// remove trailing LF
+					if line_bytes.ends_with(&[b'\n']) {
+						line_bytes.pop();
+					}
+					// Optional: remove trailing CR if present
+					if line_bytes.ends_with(&[b'\r']) {
+						line_bytes.pop();
+					}
+
+					let line = String::from_utf8_lossy(&line_bytes);
+					if let Some(rec) = crate::ingest::normalize_ndjson_line(&line, &punct_re) {
+						records.push(rec);
+					}
+				}
+
+				// Safety: guard against pathological single-line sizes
+				if buf.len() > 10 * 1024 * 1024 {
+					return (
+						StatusCode::BAD_REQUEST,
+						"line too long or streaming malformed",
+					)
+						.into_response();
+				}
+			}
+			Err(e) => {
+				return (
+					StatusCode::BAD_REQUEST,
+					format!("failed to read request body: {}", e),
+				)
+					.into_response();
+			}
+		}
+	}
+
+	// Process any trailing data after stream end
+	if !buf.is_empty() {
+		let line = String::from_utf8_lossy(&buf);
+		if let Some(rec) = crate::ingest::normalize_ndjson_line(&line, &punct_re) {
+			records.push(rec);
+		}
+	}
+
+	match serde_json::to_string(&records) {
+		Ok(body) => (StatusCode::OK, body).into_response(),
 		Err(e) => (
-			StatusCode::BAD_REQUEST,
-			format!("failed to parse NDJSON: {}", e),
+			StatusCode::INTERNAL_SERVER_ERROR,
+			format!("failed to serialize response: {}", e),
 		)
 			.into_response(),
 	}
@@ -46,6 +88,7 @@ mod tests {
 	use super::*;
 	use axum::body::Body;
 	use axum::http::Request;
+	use futures_util::stream;
 
 	#[tokio::test]
 	async fn handler_accepts_ndjson_stream() {
@@ -62,6 +105,53 @@ mod tests {
 		let resp = ndjson_upload(req).await.into_response();
 		assert_eq!(resp.status(), StatusCode::OK);
 	}
+
+	#[tokio::test]
+	async fn bulk_dump_streaming_writes_file() {
+		// Simulate a chunked upload by building a TryStream of Bytes
+		let s = stream::iter(vec![
+			Ok::<_, std::io::Error>(b"first line\n".to_vec()),
+			Ok::<_, std::io::Error>(b"second line\n".to_vec()),
+		]);
+
+		let body = Body::from_stream(s);
+
+		let req = Request::builder()
+			.method("POST")
+			.uri("/")
+			.body(body)
+			.unwrap();
+
+		let resp = bulk_dump_upload(req).await.into_response();
+		assert_eq!(resp.status(), StatusCode::OK);
+	}
+
+	#[tokio::test]
+	async fn ndjson_streaming_chunked_lines() {
+		// Simulate a NDJSON upload where a single JSON object is split across chunks
+		let s = stream::iter(vec![
+			Ok::<_, std::io::Error>(b"{".to_vec()),
+			Ok::<_, std::io::Error>(b"\"field_type\":\"domain\",\"value\":\"Exa".to_vec()),
+			Ok::<_, std::io::Error>(b"mple.COM\"}\n{".to_vec()),
+			Ok::<_, std::io::Error>(
+				b"\"field_type\":\"email\",\"value\":\"USER@EXAMPLE.COM\"}\n".to_vec(),
+			),
+		]);
+
+		let body = Body::from_stream(s);
+
+		let req = Request::builder()
+			.method("POST")
+			.uri("/")
+			.body(body)
+			.unwrap();
+
+		let resp = ndjson_upload(req).await.into_response();
+		assert_eq!(resp.status(), StatusCode::OK);
+
+		// Optionally parse and assert the returned JSON contains normalized entries
+		// but for now ensure status OK and that handler didn't error on chunk boundaries.
+	}
 }
 
 /// Bulk dump upload endpoint: accepts any raw data stream, writes it to a
@@ -72,19 +162,8 @@ pub async fn bulk_dump_upload(req: Request<Body>) -> impl IntoResponse {
 	const MAX_PEEK: usize = 64 * 1024;
 
 	let headers = req.headers().clone();
-	// For simplicity read the whole body; for production use streaming writes.
-	let bytes = match to_bytes(req.into_body(), usize::MAX).await {
-		Ok(b) => b,
-		Err(e) => {
-			return (
-				StatusCode::BAD_REQUEST,
-				format!("failed to read request body: {}", e),
-			)
-				.into_response();
-		}
-	};
 
-	// Prepare temp file path
+	// Prepare temp file path early so we can stream into it
 	let tmpdir = std::env::temp_dir();
 	let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 	let fname = format!(
@@ -106,15 +185,40 @@ pub async fn bulk_dump_upload(req: Request<Body>) -> impl IntoResponse {
 		}
 	};
 
-	let total = bytes.len();
+	// Stream the request body to the temp file while collecting a small peek buffer
+	let mut stream = req.into_body().into_data_stream();
+	let mut total: usize = 0;
+	let mut peek_buf: Vec<u8> = Vec::with_capacity(std::cmp::min(MAX_PEEK, 4096));
 
-	// Write the whole body to file
-	if let Err(e) = file.write_all(&bytes).await {
-		return (
-			StatusCode::INTERNAL_SERVER_ERROR,
-			format!("failed writing to temp file: {}", e),
-		)
-			.into_response();
+	while let Some(chunk_res) = stream.next().await {
+		match chunk_res {
+			Ok(bytes_chunk) => {
+				let chunk = bytes_chunk.as_ref();
+				total = total.saturating_add(chunk.len());
+
+				// Fill the peek buffer until full
+				if peek_buf.len() < MAX_PEEK {
+					let remaining = MAX_PEEK - peek_buf.len();
+					let take = std::cmp::min(remaining, chunk.len());
+					peek_buf.extend_from_slice(&chunk[..take]);
+				}
+
+				if let Err(e) = file.write_all(chunk).await {
+					return (
+						StatusCode::INTERNAL_SERVER_ERROR,
+						format!("failed writing to temp file: {}", e),
+					)
+						.into_response();
+				}
+			}
+			Err(e) => {
+				return (
+					StatusCode::BAD_REQUEST,
+					format!("failed to read request body chunk: {}", e),
+				)
+					.into_response();
+			}
+		}
 	}
 
 	// flush file
@@ -127,16 +231,12 @@ pub async fn bulk_dump_upload(req: Request<Body>) -> impl IntoResponse {
 	}
 
 	// Detect type from peek (use a slice of the bytes up to MAX_PEEK)
-	let peek = if bytes.len() > MAX_PEEK {
-		&bytes[..MAX_PEEK]
-	} else {
-		&bytes[..]
-	};
+	let peek = &peek_buf[..];
 	let (kind, preview, compressed) = detect_dump_type(peek);
 
 	#[derive(Serialize)]
-	struct Resp<'a> {
-		kind: &'a str,
+	struct Resp {
+		kind: String,
 		preview: String,
 		bytes: usize,
 		filename: String,
@@ -144,7 +244,7 @@ pub async fn bulk_dump_upload(req: Request<Body>) -> impl IntoResponse {
 	}
 
 	let resp = Resp {
-		kind: Box::leak(kind.into_boxed_str()),
+		kind,
 		preview,
 		bytes: total,
 		filename: tmp_path.to_string_lossy().to_string(),

@@ -101,6 +101,36 @@ How to pick up quickly (next agent checklist)
 - If continuing work on `bulk_dump_upload` replace the `to_bytes` usage with a streaming write (use `req.into_body()` and `HttpBody::data()` or `axum::body::StreamBody`) and keep a small peek buffer for detection.
 - If you want to push a PR, run `git push origin feature/test-groups-ingest` and open a PR against `v1.0.0` with the commit list and summary.
 
+---
+
+## Recent work (streaming ingest)
+
+- Date: 2025-12-07
+  Author: GitHub Copilot (assistant)
+  Summary: Implemented streaming ingestion improvements and basic router wiring.
+
+  Changes made:
+
+    + `src/ingest/handler.rs`
+        - Replaced full-body buffering in `bulk_dump_upload` with a streaming writer that writes request body chunks to a temp file and keeps a small peek buffer for detection.
+        - Converted `ndjson_upload` to a streaming, line-by-line processor using `Body::into_data_stream()` and `normalize_ndjson_line` to avoid buffering large payloads in memory.
+        - Added unit tests for chunked/broken-up uploads for both bulk and ndjson handlers (gated behind the `ingest-tests` feature).
+
+    + `src/lib.rs`
+        - Constructed a minimal `axum::Router` registering `/ingest/ndjson`, `/ingest/bulk`, and `/health`. The router is built and logged but not started inside the library to avoid runtime/server dependency mismatches during tests; consumers can start it with their preferred server.
+
+    + `Cargo.toml`
+        - Added a compatible `hyper` dependency so consumers can run the server if they choose to start it from the CLI.
+
+    + Tests & verification:
+        - Ran `cargo test` (default) and `cargo test --features ingest-tests`. All tests passed locally.
+
+  Next steps / recommended follow-up:
+
+  1. Add integration tests that start the router (using `tokio::net::TcpListener` + `hyper::Server` or `axum::serve`) and post to the endpoints; gate these behind `integration-tests` feature.
+  2. Add temp-file lifecycle and cleanup logic (rotate, retention, or immediate ingestion handoff).
+  3. Open a feature branch (e.g., `feature/streaming-ingest`) and push changes; create a PR against `v1.0.0` with the summary above.
+
 Session termination / clearing conversational state
 
 - To fully clear the assistant's conversation token cache start a new session/chat. When you start the new session instruct the agent to first read these LTM files (all in `.github/agent_memory/`) before making changes:

@@ -170,3 +170,33 @@ Last updated: 2025-12-07
   	1. Add an async streaming HTTP handler that accepts NDJSON/CSV uploads and pipes parsed records to the pipeline (implement in `src/ingest/handler.rs` or integrate with `run()` server flow).
   	2. Wire minimal ingestion path into `run()` so `heimdall run` can start a local HTTP ingest endpoint for development.
   	3. Create a feature branch for `ingest/ndjson` and open a tracking issue/PR against `v1.0.0`.
+
+## Session log — streaming bulk upload implemented
+
+- Date: 2025-12-07
+    Author: GitHub Copilot (assistant)
+    Summary: Replaced full-body buffering in `src/ingest/handler.rs::bulk_dump_upload` with a streaming writer that writes request body chunks to a temp file while maintaining a peek buffer used for dump-type detection.
+
+    Actions taken:
+
+    + Implemented chunked streaming write using `Body::into_data_stream()` and `futures_util::StreamExt::next()` to iterate body frames without buffering the full payload.
+    + Collected a peek buffer of up to 64KiB for detection using `detect_dump_type`.
+    + Switched the response `Resp.kind` to an owned `String` to avoid leaking memory via `Box::leak`.
+    + Ran `cargo test` (default fast tests) to validate compilation and unit tests; all tests passed locally.
+
+    Outcome: Task 3 (Implement streaming bulk_dump_upload) marked in-progress and first pass implemented. Next: add unit tests for chunked uploads and convert `ndjson_upload` to a streaming line-by-line handler.
+
+## Session log — ndjson_upload converted to streaming and routes registered
+
+- Date: 2025-12-07
+    Author: GitHub Copilot (assistant)
+    Summary: Converted `ndjson_upload` to a streaming, line-by-line processor and registered ingest routes in the dev router.
+
+    Actions taken:
+
+    + Implemented a non-buffering, line-oriented NDJSON reader in `src/ingest/handler.rs::ndjson_upload` using `Body::into_data_stream()` and `normalize_ndjson_line`.
+    + Added a guard to reject overly large single lines (10 MiB) to prevent pathological memory usage.
+    + Created a minimal router in `src/lib.rs` that registers `/ingest/ndjson`, `/ingest/bulk`, and `/health` endpoints. The router is constructed and logged but not started inside the library to avoid server dependency/version issues in tests; consumers can start it as needed.
+    + Ran `cargo test` (default and `ingest-tests`) — all tests pass locally.
+
+    Outcome: Task 4 completed; Task 5 (wire routes) is complete in the sense of registering routes in the codebase. Next: implement integration tests that start the router and post to the endpoints (gated behind feature flags) and open a PR.
