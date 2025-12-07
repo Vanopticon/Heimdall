@@ -57,7 +57,10 @@ pub async fn run() {
 			match pemfile::certs(&mut reader) {
 				Ok(c) if !c.is_empty() => c.into_iter().map(Certificate).collect::<Vec<_>>(),
 				_ => {
-					eprintln!("No certificates found in '{}'. Heimdall requires a PEM certificate chain.", cert_path);
+					eprintln!(
+						"No certificates found in '{}'. Heimdall requires a PEM certificate chain.",
+						cert_path
+					);
 					std::process::exit(1);
 				}
 			}
@@ -81,7 +84,10 @@ pub async fn run() {
 				if !rsa.is_empty() {
 					PrivateKey(rsa[0].clone())
 				} else {
-					eprintln!("No private key found in '{}'. Heimdall requires a PEM private key (PKCS8 or RSA).", key_path);
+					eprintln!(
+						"No private key found in '{}'. Heimdall requires a PEM private key (PKCS8 or RSA).",
+						key_path
+					);
 					std::process::exit(1);
 				}
 			}
