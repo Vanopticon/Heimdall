@@ -1,0 +1,12 @@
+{
+	"category": "functional",
+	"description": "Configurable external enrichment providers and a worker pool to augment records with provenance.",
+	"steps": [
+		"Define adapter interface and provider config format.",
+		"Implement scheduler and worker pool.",
+		"Add rate-limiter, backoff, and circuit-breaker.",
+		"Build sample adapters (ASN, geoip).",
+		"Add integration tests using mocked providers."
+	],
+	"passes": false
+}

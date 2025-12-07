@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  db:
+    build:
+      context: ./docker/postgres-age
+      dockerfile: Dockerfile
+    image: vanopticon/heimdall-postgres-age:latest
+    container_name: heimdall-postgres-age
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=heimdall
+      - POSTGRES_USER=heimdall
+      - POSTGRES_DB=heimdall
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-age/initdb:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  pgdata:
+    name: heimdall_pgdata
+# Notes:
+# - The Dockerfile in `docker/postgres-age` builds Postgres with pgvector and Apache AGE.
+# - Init scripts in `docker/postgres-age/initdb` create the `age` and `pgvector` extensions.

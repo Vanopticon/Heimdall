@@ -1,0 +1,12 @@
+{
+	"category": "functional",
+	"description": "Continuous synchronization between Heimdall instances using append-only change logs, TLS-secured replication, and merge rules.",
+	"steps": [
+		"Design change-log schema and per-record metadata (version vector, origin, tombstone).",
+		"Implement change-log writer and local storage.",
+		"Implement sync agent (push/pull) with TLS and OIDC auth.",
+		"Implement merge resolver and per-type rules.",
+		"Add tests for partitions and reconciliation."
+	],
+	"passes": false
+}

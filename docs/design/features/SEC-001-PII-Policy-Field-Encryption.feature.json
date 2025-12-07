@@ -1,0 +1,11 @@
+{
+	"category": "security",
+	"description": "PII policy engine and field-level encryption to ensure no plaintext PII is stored; audit decrypt operations.",
+	"steps": [
+		"Define policy config and storage schema for encrypted fields.",
+		"Implement envelope encryption helpers using a vetted Rust crypto crate (discuss selection before implementation).",
+		"Integrate into ingest pipeline.",
+		"Add tests ensuring plaintext never written to DB."
+	],
+	"passes": false
+}
