@@ -11,6 +11,9 @@ on:
       - main
       - v1.0.0
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Run Tests
