@@ -1,4 +1,3 @@
-use anyhow::Result;
 use hostname;
 use log::Level;
 use serde::Deserialize;
@@ -20,6 +19,11 @@ pub struct Settings {
 	pub tls_cert: String,
 	pub tls_key: String,
 	pub log_level: Level,
+	// Rate limiting: requests-per-second and burst size (tokens)
+	pub rate_limit_rps: u32,
+	pub rate_limit_burst: u32,
+	// AGE graph name to use when persisting
+	pub age_graph: String,
 }
 
 impl Default for Settings {
@@ -27,7 +31,7 @@ impl Default for Settings {
 		let host = hostname::get()
 			.ok()
 			.and_then(|s| s.into_string().ok())
-			.unwrap();
+			.unwrap_or_else(|| "127.0.0.1".to_string());
 
 		Self {
 			host,
@@ -37,11 +41,20 @@ impl Default for Settings {
 			tls_cert: "/etc/tls/tls.crt".to_string(),
 			tls_key: "/etc/tls/tls.key".to_string(),
 			log_level: Level::Info,
+			// sensible defaults for dev: 10 RPS refill, burst up to 100
+			rate_limit_rps: 10,
+			rate_limit_burst: 100,
+			age_graph: "heimdall_graph".to_string(),
 		}
 	}
 }
 
-/// Load settings from config file (optional) and environment variables.
+#[derive(Debug, Error)]
+pub enum SettingsError {
+	#[error("configuration error: {0}")]
+	Config(#[from] config::ConfigError),
+}
+
 pub fn load() -> Result<Settings, SettingsError> {
 	let mut builder = config::Config::builder()
 		.add_source(config::File::with_name("/etc/vanopticon/heimdall.json").required(false));
@@ -92,6 +105,25 @@ pub fn load() -> Result<Settings, SettingsError> {
 			s.tls_key = k;
 		}
 	}
+	if let Ok(r) = std::env::var("HMD_RATE_LIMIT_RPS") {
+		if !r.is_empty() {
+			if let Ok(parsed) = r.parse::<u32>() {
+				s.rate_limit_rps = parsed;
+			}
+		}
+	}
+	if let Ok(b) = std::env::var("HMD_RATE_LIMIT_BURST") {
+		if !b.is_empty() {
+			if let Ok(parsed) = b.parse::<u32>() {
+				s.rate_limit_burst = parsed;
+			}
+		}
+	}
+	if let Ok(g) = std::env::var("HMD_AGE_GRAPH") {
+		if !g.is_empty() {
+			s.age_graph = g;
+		}
+	}
 	if let Ok(l) = std::env::var("HMD_LOG_LEVEL") {
 		if !l.is_empty() {
 			if let Ok(parsed) = l.parse::<Level>() {
@@ -103,11 +135,6 @@ pub fn load() -> Result<Settings, SettingsError> {
 	Ok(s)
 }
 
-#[derive(Debug, Error)]
-pub enum SettingsError {
-	#[error("configuration error: {0}")]
-	Config(#[from] config::ConfigError),
-}
 #[cfg(test)]
 #[cfg(feature = "unit-tests")]
 mod tests {

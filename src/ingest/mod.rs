@@ -8,11 +8,9 @@ pub use ndjson::{normalize_ndjson, normalize_ndjson_line};
 
 #[cfg(feature = "unit-tests")]
 mod tests {
-	use super::*;
-
 	#[test]
 	fn module_loaded() {
 		// smoke test that module compiles and exports `NormalizedRecord`
-		let _ = std::mem::size_of::<NormalizedRecord>();
+		let _ = std::mem::size_of::<crate::ingest::NormalizedRecord>();
 	}
 }
