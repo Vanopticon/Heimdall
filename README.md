@@ -104,6 +104,28 @@ Operational checklist for deployment:
 - Add end-to-end tests that run against a disposable AGE-enabled Postgres instance in CI to catch schema drift.
 - Improve observability: structured logs and metrics (Prometheus) for ingestion throughput, error rates, and enrichment latency.
 
+## Persistence and Metrics
+
+- Persistence: Incoming raw uploads are written to a temporary file for
+	offline analysis when using the bulk upload endpoint. Raw payloads are
+	NOT written directly to the graph database. Only normalized and
+	sanitized records (canonical values) are enqueued to the background
+	batcher and persisted into Postgres+AGE via MERGE statements.
+
+- Batching & safety: The service batches persistence jobs to reduce DB
+	round-trips. Property keys are sanitized to a safe identifier form
+	(alphanumeric and underscore) and string values are JSON-serialized
+	when embedded into Cypher to reduce injection surface. Further
+	hardening (parameterized UNWIND batches) is recommended for
+	high-security deployments.
+
+- Metrics: A lightweight Prometheus-compatible `/metrics` endpoint is
+	exposed by the dev server that reports simple persistence metrics
+	(jobs submitted, batch flushes, failures, and cumulative batch
+	latency). This is intentionally minimal to avoid adding another
+	runtime dependency; integrate a Prometheus client if you need richer
+	metric types and labels.
+
 ## Where to Look Next
 
 - `src/main.rs` — CLI and runtime entrypoint.

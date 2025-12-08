@@ -37,7 +37,6 @@ Refer to the your memory, the project [README.md](../README.md), and the project
 * `docs/`: User documentation
 * `docs/design/`: Architecture and design docs
 * `src/`: Core source code
-* Other dot folders (`.`): Used by tooling; can safely be ignored
 
 ## Workflow
 
