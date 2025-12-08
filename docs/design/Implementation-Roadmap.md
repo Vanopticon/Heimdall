@@ -91,3 +91,21 @@ Acceptance:
 - Security: PII controls, TLS 1.3 enforcement, OIDC token validation.
 - Observability: JSON logs, Prometheus metrics, traces.
 - 100% Rust implementation; all CLI/output to `stdout`/`stderr`.
+
+## Architecture Review — ARCH-001
+
+Timeline: 0.5 sprint
+
+Deliverables:
+
+- Add system diagram and component mapping to `docs/design/Architecture.md`.
+- Create `docs/design/features/ARCH-001-Architecture-Review.feature.json` and accompanying markdown summary.
+- Define `persist_row` / `persist_dump` API contract and a plan to implement `src/persistence.rs`.
+- Refactor `src/age_client.rs::merge_entity` to a safe parameterized approach.
+- Add integration tests for ingest → persistence → query flows using the `docker/` dev DB.
+
+Acceptance:
+
+- Architecture doc updated and reviewed.
+- Feature JSON + markdown exist and map to implementation tasks.
+- Integration tests execute against local dev DB in CI or developer environment.
