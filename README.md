@@ -1,31 +1,27 @@
 # Heimdall — Central Ingestion, ETL & Data-Scrubbing Hub
 
-# Heimdall — Central Ingestion, ETL & Data-Scrubbing Hub
-
-Heimdall (named for the keeper of the Rainbow Bridge) is the ETL, data scrubbing, normalization, enrichment, and tool-bridging component of the Vanopticon suite. It provides secure, resilient, and auditable ingestion pipelines that normalize and correlate telemetry into a graph model for downstream analysis, detection, and response.
+Heimdall (named for the keeper of the Rainbow Bridge) is the ETL, data-scrubbing, normalization, enrichment, and tool-bridging component of the Vanopticon suite. It provides secure, resilient, and auditable ingestion pipelines that normalize and correlate telemetry into a canonical graph model for downstream analysis, detection, and response.
 
 ## Purpose
 
 - **Ingest** telemetry from vendors, sensors, APIs, and batch uploads.
 - **Transform & scrub** incoming data to canonical forms, removing PII where required and normalizing entity types (IP, domains, hashes, emails, etc.).
-- **Enrich** data with ASN, geolocation, NPI classification, and other
-	contextual metadata.
-- **Correlate** entities and sightings in a graph store to enable threat
-	linkage, deduplication, and provenance tracking.
+- **Enrich** data with ASN, geolocation, NPI classification, and other contextual metadata.
+- **Correlate** entities and sightings in a graph store to enable threat linkage, deduplication, and provenance tracking.
 
 ## Architecture Overview
 
-- **Frontend / UI**: Built with SvelteKit and shipped via the Node adapter (SSR capable). Frontend is served from the build output by the Express wrapper.
-- **Application Server**: An Express wrapper (`server/server.ts`) provides TLS, authentication support for both interactive users and machine clients (OIDC via `openid-client` for user login; OAuth2 Client Credentials for machine-to-machine integrations), session management, and serves the SvelteKit handler.
-- **Graph & vector store**: A database with graph and vector capabilities stores the Heimdall data model. Postgres+AGE is a common and recommended choice for development; when using Postgres+AGE the project uses `age-schema-client` (wrapped in `src/lib/server/ageClient.ts`) for schema-aware operations and raw Cypher fallbacks. Other graph/vector-capable stores can be used in production deployments.
-- **Pipelines & APIs**: Ingest endpoints (e.g. `src/routes/api/upload/+server.ts`) and future pipeline workers normalize and enrich incoming telemetry.
+- **Backend (this repository)**: Rust-based service implemented with `tokio` and `axum`. The CLI and runtime entrypoint is `src/main.rs` (see the `Run`, `StartDb`, and `StopDb` subcommands).
+- **Graph & vector store**: PostgreSQL + Apache AGE + `pgvector` stores nodes, edges, provenance, and vector embeddings. Use the included `docker/` and `scripts/` helpers for local development.
+- **Pipelines & APIs**: Streaming ingest handlers and parsing adapters live in `src/ingest/` (NDJSON/CSV adapters and HTTP handlers). Enrichers, sync agents, and operational helpers are under `src/` as `src/enrich/`, `src/sync/`, and `src/devops/`.
+- **Security & Observability**: TLS 1.3, OIDC token validation, structured JSON logs, Prometheus metrics, and OTLP/OpenTelemetry tracing (design details in `docs/design/`).
 
 Refer to `docs/design/Architecture.md` and `docs/design/DataModel.md` for diagrams and the canonical graph model.
 
 ## Data Model (high level)
 
-- Graph-centered: nodes for `dumps`, `fields`, `field_value`, `ip`, `NPI_Category`, and `sightings` to capture occurrences and provenance.
-- Support for deduplication and cross-field sightings to surface linkages between otherwise separate records.
+- Graph-centered: canonical nodes include `Dump`, `Field`, `FieldValue`, `Entity`, `IP`, `NPI_Category`, and `Sighting` to capture occurrences and provenance.
+- Deduplication and cross-field sightings are used to surface linkages between otherwise separate records.
 
 See `sql/v1/001-create_graph.sql` for the authoritative schema and indices.
 
@@ -33,126 +29,88 @@ See `sql/v1/001-create_graph.sql` for the authoritative schema and indices.
 
 Prerequisites:
 
-- Node.js (recommended LTS) and `pnpm` installed.
-- A database with graph and vector capabilities (Postgres+AGE recommended for integration tests / dev).
-
-- **Zero NPI Output**: All output has been scrubbed clean of NPI, or the NPI has been one way encoded to allow it to still be processed securely.
-- **Flexible ingestion**: HTTP APIs and upload handlers accepting raw payloads	and multipart uploads. Streaming writes avoid large memory spikes.
-- **Graph-backed model**: Uses PostgreSQL + AGE to represent entities, their	relationships, and sighting provenance for high-fidelity correlation.
-- **Idempotent operations**: Merge/`MERGE`-style graph operations prevent	duplication and make re-ingest safe.
-- **Pluggable pipeline stages**: Parsing, canonicalization, enrichment, and	routing stages designed to be extended with vendor connectors or enrichers.
-- **Secure-by-default runtime**: OIDC-based authentication, strict	Content-Security-Policy, TLS 1.3 enforcement, secure session cookies,	and rate limiting.
-- **Operational tooling**: Clear environment-driven configuration, logging,	and error handling for production readiness.
-
-## Architecture Overview
-
-- **Frontend / UI**: Built with SvelteKit and shipped via the Node adapter (SSR
-	capable). Frontend is served from the build output by the Express wrapper.
-- **Application Server**: An Express wrapper (`server/server.ts`) provides TLS, authentication support for both interactive users and machine clients (OIDC via `openid-client` for user login; OAuth2 Client Credentials for machine-to-machine integrations), session management, and serves the SvelteKit handler.
-- **Graph & vector store**: A database with graph and vector capabilities stores the Heimdall data model. Postgres+AGE is a common and recommended choice for development; when using Postgres+AGE the project uses `age-schema-client` (wrapped in `src/lib/server/ageClient.ts`) for schema-aware operations and raw Cypher fallbacks. Other graph/vector-capable stores can be used in production deployments.
-- **Pipelines & APIs**: Ingest endpoints (e.g. `src/routes/api/upload/+server.ts`)
-	and future pipeline workers normalize and enrich incoming telemetry.
-
-Refer to `docs/design/Architecture.md` and `docs/design/DataModel.md` for
-diagrams and the canonical graph model.
-
-## Data Model (high level)
-
-- Graph-centered: nodes for `dumps`, `fields`, `field_value`, `ip`, `NPI_Category`,
-	and `sightings` to capture occurrences and provenance.
-- Support for deduplication and cross-field sightings to surface linkages
-	between otherwise separate records.
-
-See `sql/v1/001-create_graph.sql` for the authoritative schema and indices.
-
-## Getting Started (Development)
-
-Prerequisites:
-
-- Node.js (recommended LTS) and `pnpm` installed.
-- A database with graph and vector capabilities (Postgres+AGE recommended for integration tests / dev).
+- Rust toolchain (rustup + cargo) — recommended stable channel.
+- Docker and `docker-compose` (for Postgres+AGE local dev), or the helper scripts in `scripts/`.
 
 Quick dev run (local, minimal):
 
 ```bash
-pnpm install
-pnpm build
-# Run the server (reads TLS cert and key from env, or place certs locally)
-NODE_ENV=development HMD_HOST=127.0.0.1 HMD_PORT=443 \
-	HMD_TLS_KEY=/path/to/tls.key HMD_TLS_CERT=/path/to/tls.crt \
-	HMD_OAUTH_DISCOVERY_URL="https://example/.well-known/openid-configuration" \
-	HMD_OAUTH_AUTH_ID=client_id HMD_OAUTH_AUTH_SECRET=client_secret \
-	pnpm dev
+# Build the workspace
+cargo build --workspace
+
+# Start the dev Postgres+AGE (preferred: use the built-in helper)
+# This will run the docker-compose-based dev DB used for integration testing.
+cargo run -- StartDb --timeout 120
+
+# Run the application (default runtime)
+cargo run -- run
+
+# Stop the dev DB
+cargo run -- StopDb
+
+# Run tests
+cargo test
+```
+
+If you prefer script helpers, you can use the provided scripts:
+
+```bash
+scripts/start-postgres.sh
+scripts/stop-postgres.sh
 ```
 
 Notes:
 
-- `server/server.ts` enforces a set of required environment variables. At
-	startup the server will validate that the OIDC discovery URL is reachable
-	and will exit on misconfiguration.
-- Database connectivity is taken from `HMD_DATABASE_URL` or the normal
-	`PG*` environment variables and falls back to sane defaults in the code but
-	should be configured for production.
+- The runtime entrypoint is `src/main.rs`. The CLI exposes dev DB helpers as subcommands; see `--help` for details.
+- Database connectivity is taken from `HMD_DATABASE_URL` or `PG*` environment variables. The logical graph name inside AGE is controlled by `AGE_GRAPH`.
 
 ## Configuration (important environment variables)
 
 - `HMD_HOST`, `HMD_PORT` — host and port the server binds to.
-- `HMD_TLS_KEY`, `HMD_TLS_CERT` — TLS key and certificate paths (required).
--- `HMD_OAUTH_DISCOVERY_URL`, `HMD_OAUTH_AUTH_ID`, `HMD_OAUTH_AUTH_SECRET`,
-	`HMD_OAUTH_SCOPES` — OIDC configuration used for interactive user login (browser-based login flows). Machine-to-machine (service-to-service) integrations should use the OAuth2 Client Credentials (client credentials) flow and obtain bearer tokens from your identity provider; client credentials and service tokens should be managed securely by your deployment/secret management solution.
-- `HMD_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` —
-	database connection information.
+- `HMD_TLS_KEY`, `HMD_TLS_CERT` — TLS key and certificate paths (required for TLS deployments).
+- `HMD_OAUTH_DISCOVERY_URL`, `HMD_OAUTH_AUTH_ID`, `HMD_OAUTH_AUTH_SECRET`, `HMD_OAUTH_SCOPES` — OIDC configuration used for interactive user login.
+- `HMD_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` — database connection.
 - `AGE_GRAPH` — logical graph name inside the AGE-enabled database.
 
-Keep secrets out of source control and use a secrets manager for production.
+Keep secrets out of source control and use a secrets manager in production.
 
 ## Security & Operations
 
-- TLS 1.3 is required by the default server; verify certificate management for
-	automated renewals (ACME / cert-manager) in production.
-- OIDC is used for authentication; ensure client credentials and redirect
-	URIs are registered and rotated as appropriate.
-- Rate limiting and request size limits are configured to reduce abuse.
+- TLS 1.3 is recommended and enforced in production configurations.
+- Authentication/authorization: external OIDC/OAuth2 provider; tokens are validated locally.
+- PII handling: policy-driven field-level rules (scrub, one-way hash, envelope encryption). Two-way decryption operations must be audited.
 
 Operational checklist for deployment:
 
-1. Provision a database with the required graph and vector capabilities (Postgres+AGE recommended) and run the SQL schema in `sql/v1` or apply equivalent schema/transformations for the chosen store.
-2. Configure secrets and TLS certs in a secure store or mounted path.
-3. Validate OIDC discovery and client credentials in a staging environment.
-4. Configure logging, monitoring, and backups for the graph database.
+1. Provision a Postgres instance with AGE and `pgvector` (use `docker/postgres-age/` for local dev).
+2. Apply SQL schema in `sql/v1/`.
+3. Provide TLS certs and OIDC client credentials via environment variables or a secrets manager.
+4. Configure logging, monitoring (Prometheus), and backups for the graph database.
 
 ## Tests and Quality
 
-- Unit and integration tests should be added for:
-   	+ `src/lib/server/ageClient.ts` graph operations (mock or test DB).
-   	+ `src/routes/api/upload` streaming handling and error paths.
-   	+ OIDC-related flows should be validated in integration tests.
-
-This repository includes `vitest` and Svelte testing tooling; extend tests
-before adding new ingestion logic.
+- Unit, integration, and e2e tests are implemented with Rust test harnesses. Integration tests run against an ephemeral Postgres+AGE instance (Docker Compose).
+- Run `cargo test` for unit/integration tests. See `docs/design/Implementation-Roadmap.md` for testing expectations.
 
 ## Contributing
 
 - Follow `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` for PRs and code reviews.
-- Use a feature branch off of `v1.0.0` and open a PR to that branch (do not
-	open PRs directly to `main`).
+- Use a feature branch off of `v1.0.0` and open a PR against that branch (do not open PRs directly to `main`).
 
 ## Roadmap / Suggested Features
 
 - Add configurable enrichment workers so enrichers can run asynchronously.
 - Add a plugin system for vendor connector transforms and signature parsers.
-- Add end-to-end tests that run against a disposable AGE-enabled Postgres
-	instance in CI to catch schema drift.
-- Improve observability: structured logs and metrics (Prometheus) for
-	ingestion throughput, error rates, and enrichment latency.
+- Add end-to-end tests that run against a disposable AGE-enabled Postgres instance in CI to catch schema drift.
+- Improve observability: structured logs and metrics (Prometheus) for ingestion throughput, error rates, and enrichment latency.
 
 ## Where to Look Next
 
-- `server/` — Express wrapper and runtime configuration.
-- `src/lib/server/ageClient.ts` — graph client wrapper and examples of Cypher
-	operations used by the app.
-- `src/routes/api/upload/+server.ts` — streaming upload endpoint.
-- `sql/v1` — SQL schema for the graph model.
+- `src/main.rs` — CLI and runtime entrypoint.
+- `src/age_client.rs` — Postgres+AGE helper client.
+- `src/ingest/` — ingest handlers and parsers (NDJSON/CSV, streaming helpers).
+- `src/devops/` — dev DB helpers and docker helpers.
+- `sql/v1` — SQL schema for the canonical graph model.
 
 ---
 

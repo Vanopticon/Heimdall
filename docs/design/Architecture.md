@@ -65,6 +65,7 @@ Heimdall is the ETL, normalization, enrichment, and correlation hub for telemetr
 -- Select concrete Rust crates for HTTP server, Postgres client (`tokio-postgres`/`sqlx`), AGE helpers (e.g., `age-schema-client` or raw SQL execution), crypto primitives, metrics, and tracing.
 
 ---
+
 ## System Diagram (Mermaid)
 
 ```mermaid
