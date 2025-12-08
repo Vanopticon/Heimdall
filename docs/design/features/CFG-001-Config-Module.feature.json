@@ -1,0 +1,11 @@
+{
+	"category": "functional",
+	"description": "Project scaffolding and env-first config module (src/lib/server/config)",
+	"passes": false,
+	"steps": [
+		"Add src/lib/server/config module exposing Settings and load()",
+		"Export config module from src/lib/server/index.ts",
+		"Add CI job placeholder and unit tests",
+		"Document config in README and design docs"
+	]
+}
