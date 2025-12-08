@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -31,7 +32,7 @@ export interface Settings {
 	database_url?: string;
 	/** Cookie encryption secret (generated if not provided) */
 	cookie_secret: string;
-	/** AGE graph name (defaults to "heimdall_graph") */
+	/** AGE graph name (defaults to "dumps_graph" for consistency with ageClient.ts) */
 	age_graph: string;
 }
 
@@ -109,18 +110,26 @@ export function load(options: LoadOptions = {}): Settings {
 	const cookieSecret =
 		process.env.HMD_COOKIE_SECRET ||
 		fileConfig.cookie_secret ||
-		(() => {
-			// Generate a random secret
-			const crypto = require('crypto');
-			return crypto.randomBytes(32).toString('hex');
-		})();
+		crypto.randomBytes(32).toString('hex');
+
+	// Parse and validate port number
+	let port = 443; // default
+	if (process.env.HMD_PORT) {
+		const parsedPort = parseInt(process.env.HMD_PORT, 10);
+		if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+			throw new Error(
+				`Invalid HMD_PORT value: "${process.env.HMD_PORT}". Port must be a number between 1 and 65535.`,
+			);
+		}
+		port = parsedPort;
+	} else if (fileConfig.port !== undefined) {
+		port = fileConfig.port;
+	}
 
 	// Build settings object with env vars taking precedence over file config
 	const settings: Settings = {
 		host: process.env.HMD_HOST || fileConfig.host || os.hostname(),
-		port: process.env.HMD_PORT
-			? parseInt(process.env.HMD_PORT)
-			: fileConfig.port || 443,
+		port,
 		tls_key_path: process.env.HMD_TLS_KEY || fileConfig.tls_key_path || '/etc/tls/tls.key',
 		tls_cert_path:
 			process.env.HMD_TLS_CERT || fileConfig.tls_cert_path || '/etc/tls/tls.crt',
@@ -134,7 +143,7 @@ export function load(options: LoadOptions = {}): Settings {
 			process.env.HMD_OIDC_SCOPE || fileConfig.oidc_scope || 'openid profile email',
 		database_url: process.env.HMD_DATABASE_URL || fileConfig.database_url,
 		cookie_secret: cookieSecret,
-		age_graph: process.env.HMD_AGE_GRAPH || fileConfig.age_graph || 'heimdall_graph',
+		age_graph: process.env.HMD_AGE_GRAPH || fileConfig.age_graph || 'dumps_graph',
 	};
 
 	// Validate TLS paths exist if validate is enabled

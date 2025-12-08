@@ -110,7 +110,7 @@ Optional environment variables:
 - `HMD_HOST`, `HMD_PORT` — host and port the server binds to (defaults: hostname, 443).
 - `HMD_OIDC_SCOPE` — OIDC scope (default: "openid profile email").
 - `HMD_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` — database connection information.
-- `HMD_AGE_GRAPH` — logical graph name inside the AGE-enabled database (default: "heimdall_graph").
+- `HMD_AGE_GRAPH` — logical graph name inside the AGE-enabled database (default: "dumps_graph").
 - `HMD_COOKIE_SECRET` — cookie encryption secret (auto-generated if not provided).
 
 Keep secrets out of source control and use a secrets manager for production.

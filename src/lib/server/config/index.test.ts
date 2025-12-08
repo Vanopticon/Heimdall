@@ -62,7 +62,7 @@ describe('config module', () => {
 			expect(settings.host).toBe(os.hostname());
 			expect(settings.port).toBe(443);
 			expect(settings.oidc_scope).toBe('openid profile email');
-			expect(settings.age_graph).toBe('heimdall_graph');
+			expect(settings.age_graph).toBe('dumps_graph');
 		});
 
 		it('should override defaults with environment variables', () => {
@@ -77,6 +77,18 @@ describe('config module', () => {
 			expect(settings.port).toBe(8443);
 			expect(settings.oidc_scope).toBe('custom scope');
 			expect(settings.age_graph).toBe('custom_graph');
+		});
+
+		it('should throw error for invalid port number', () => {
+			process.env.HMD_PORT = 'not-a-number';
+
+			expect(() => load()).toThrow('Invalid HMD_PORT value');
+		});
+
+		it('should throw error for port number out of range', () => {
+			process.env.HMD_PORT = '99999';
+
+			expect(() => load()).toThrow('Invalid HMD_PORT value');
 		});
 
 		it('should generate cookie_secret if not provided', () => {
