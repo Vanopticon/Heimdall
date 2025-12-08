@@ -1,0 +1,21 @@
+{
+  "id": "ARCH-001",
+  "category": "architecture",
+  "description": "Architecture review: add system diagram, component mapping, immediate recommendations, and acceptance criteria to align implementation with roadmap.",
+  "steps": [
+    "Add mermaid system diagram to `docs/design/Architecture.md`",
+    "Map code components to sections of the architecture doc",
+    "Create persistence module design and identify API contracts for `persist_row`/`persist_dump`",
+    "Refactor `AgeClient` usage patterns to avoid string-concatenated Cypher",
+    "Add integration tests for ingest → persistence → query using dev Postgres+AGE",
+    "Define KMS/Vault integration plan for envelope encryption and key rotation",
+    "Persist decisions to `/memories/Feature-ARCH-Architecture-Review.md` and update roadmap tasks"
+  ],
+  "acceptance_criteria": [
+    "Architecture doc contains a mermaid diagram and component mapping",
+    "Feature JSON exists and documents steps and acceptance criteria",
+    "Implementation Roadmap updated with tasks and test expectations",
+    "Memory entry created describing decisions and next steps"
+  ],
+  "passes": false
+}
