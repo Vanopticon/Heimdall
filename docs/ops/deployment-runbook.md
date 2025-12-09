@@ -98,8 +98,9 @@ export HMD_PORT=443
 export HMD_DATABASE_URL=postgres://heimdall:heimdall@localhost:5432/heimdall
 export HMD_AGE_GRAPH=heimdall_graph
 
-# Optional: Security
-export HMD_COOKIE_SECRET=$(openssl rand -base64 32)
+# Optional: Security (generate cookie secret once and store securely)
+# To generate a new cookie secret: openssl rand -base64 32
+export HMD_COOKIE_SECRET=your-securely-stored-cookie-secret-here
 export HMD_OIDC_SCOPE="openid profile email"
 ```
 
@@ -493,7 +494,11 @@ HMD_DATABASE_URL=postgres://heimdall:PASSWORD@localhost:5432/heimdall
 HMD_AGE_GRAPH=heimdall_graph
 HMD_HOST=0.0.0.0
 HMD_PORT=443
+# Optional: Generate with: openssl rand -base64 32
+# HMD_COOKIE_SECRET=your-securely-stored-cookie-secret-here
 ```
+
+**Note**: Store sensitive values (OAuth secrets, database passwords, cookie secrets) in the environment file. Generate cookie secret once: `openssl rand -base64 32` and store it securely.
 
 Set permissions:
 
