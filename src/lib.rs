@@ -5,6 +5,7 @@ pub mod health;
 pub mod ingest;
 pub mod persist;
 pub mod state;
+pub mod sync;
 pub mod tls_utils;
 
 use std::net::SocketAddr;
