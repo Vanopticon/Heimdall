@@ -158,8 +158,8 @@ pub fn normalize_ip(input: &str) -> Result<NormalizedIp, NormalizerError> {
 		})
 	} else {
 		// Parse as regular IP address
-		let addr = IpAddr::from_str(input)
-			.map_err(|_| NormalizerError::InvalidIp(input.to_string()))?;
+		let addr =
+			IpAddr::from_str(input).map_err(|_| NormalizerError::InvalidIp(input.to_string()))?;
 
 		Ok(NormalizedIp {
 			canonical: addr.to_string(),
@@ -257,7 +257,7 @@ pub fn normalize_hash(input: &str) -> Result<NormalizedHash, NormalizerError> {
 			return Err(NormalizerError::InvalidHash(format!(
 				"unrecognized hash length: {} (expected 32/40/64/96/128)",
 				canonical.len()
-			)))
+			)));
 		}
 	};
 
@@ -341,10 +341,9 @@ pub fn normalize_timestamp(input: &str) -> Result<NormalizedTimestamp, Normalize
 	// Try to parse as RFC3339/ISO-8601 first
 	if let Ok(dt) = DateTime::parse_from_rfc3339(input) {
 		return Ok(NormalizedTimestamp {
-			canonical: dt.with_timezone(&Utc).to_rfc3339_opts(
-				chrono::SecondsFormat::Secs,
-				true,
-			),
+			canonical: dt
+				.with_timezone(&Utc)
+				.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
 			version: 1,
 		});
 	}
