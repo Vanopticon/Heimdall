@@ -222,13 +222,25 @@ impl SyncAgent {
 	) -> Result<Self> {
 		// Build TLS client config with system root certs
 		let mut root_store = RootCertStore::empty();
-		for cert in rustls_native_certs::load_native_certs()
-			.context("failed to load native root certificates")?
-		{
-			root_store
-				.add(&tokio_rustls::rustls::Certificate(cert.to_vec()))
-				.context("failed to add root certificate")?;
+		let certs = rustls_native_certs::load_native_certs()
+			.context("failed to load native root certificates")?;
+
+		let mut valid_certs = 0;
+		for cert in certs {
+			match root_store.add(&tokio_rustls::rustls::Certificate(cert.to_vec())) {
+				Ok(_) => valid_certs += 1,
+				Err(e) => {
+					// Log individual certificate errors but continue loading others
+					debug!("Skipping invalid certificate from native store: {:?}", e);
+				}
+			}
 		}
+
+		if valid_certs == 0 {
+			anyhow::bail!("no valid root certificates found in native store");
+		}
+
+		debug!("Loaded {} valid root certificates", valid_certs);
 
 		let client_config = ClientConfig::builder()
 			.with_safe_default_cipher_suites()
@@ -292,8 +304,13 @@ impl SyncAgent {
 				Err(e) => {
 					error!("Sync cycle failed with peer {}: {}", peer_addr, e);
 					self.metrics.reconnections.fetch_add(1, Ordering::Relaxed);
-					// Exponential backoff on error
-					sleep(Duration::from_secs(5)).await;
+					// Exponential backoff with jitter to avoid thundering herd
+					let jitter = (std::time::SystemTime::now()
+						.duration_since(std::time::UNIX_EPOCH)
+						.unwrap()
+						.as_millis() % 5000) as u64 / 1000;
+					let backoff_secs = 5 + jitter;
+					sleep(Duration::from_secs(backoff_secs)).await;
 				}
 			}
 		}

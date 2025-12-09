@@ -5,7 +5,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 /// OIDC discovery document structure as defined by OpenID Connect Discovery 1.0
@@ -174,19 +174,9 @@ impl OidcProvider {
 		validation.set_issuer(&[&doc.issuer]);
 		validation.set_audience(&[&self.client_id]);
 
-		// Decode and validate the token
+		// Decode and validate the token (includes expiration check)
 		let token_data = decode::<Claims>(token, &decoding_key, &validation)
 			.context("failed to validate JWT")?;
-
-		// Additional expiration check
-		let now = SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.unwrap()
-			.as_secs();
-
-		if token_data.claims.exp < now {
-			anyhow::bail!("token has expired");
-		}
 
 		debug!("Token validated successfully for subject: {}", token_data.claims.sub);
 

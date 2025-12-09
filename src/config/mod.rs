@@ -39,6 +39,9 @@ impl Default for Settings {
 			.and_then(|s| s.into_string().ok())
 			.unwrap_or_else(|| "127.0.0.1".to_string());
 
+		// Generate a default node ID based on hostname to avoid collisions
+		let default_node_id = format!("heimdall-{}", host.replace(".", "-"));
+
 		Self {
 			host,
 			port: 443,
@@ -52,7 +55,7 @@ impl Default for Settings {
 			rate_limit_burst: 100,
 			age_graph: "heimdall_graph".to_string(),
 			sync_enabled: false,
-			sync_node_id: "heimdall-node-1".to_string(),
+			sync_node_id: default_node_id,
 			oidc_discovery_url: "".to_string(),
 			oidc_client_id: "".to_string(),
 			oidc_client_secret: "".to_string(),

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::time::sleep;
+use std::time::{SystemTime, UNIX_EPOCH};
 use vanopticon_heimdall::sync::{ChangeLogEntry, OidcProvider, PeerConfig, SyncAgent};
 
 /// Test that the sync agent can be created with valid configuration
