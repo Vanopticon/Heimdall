@@ -1,6 +1,7 @@
 pub mod age_client;
 pub mod config;
 pub mod devops;
+pub mod enrich;
 pub mod health;
 pub mod ingest;
 pub mod persist;
