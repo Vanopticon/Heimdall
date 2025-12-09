@@ -104,6 +104,192 @@ impl AgeClient {
 			.await?;
 		Ok(())
 	}
+
+	/// Persist a single row with its cells (sightings) into the graph.
+	///
+	/// This creates Row + Sighting nodes and links them to canonical FieldValue nodes.
+	/// The row structure is preserved for provenance while deduplicating values.
+	///
+	/// # Arguments
+	/// * `dump_id` - Unique identifier for the parent Dump
+	/// * `row_index` - Zero-based row number in the dump
+	/// * `row_hash` - Optional canonical hash of the row for duplicate detection
+	/// * `cells` - Vector of (column_name, raw_value, canonical_key, canonical_value) tuples
+	/// * `timestamp` - ISO8601 timestamp string for the sighting
+	pub async fn persist_row(
+		&self,
+		dump_id: &str,
+		row_index: i64,
+		row_hash: Option<&str>,
+		cells: &[(String, String, String, String)],
+		timestamp: &str,
+	) -> Result<()> {
+		// Build Cypher statements for row and sighting creation
+		let dump_id_json = serde_json::to_string(dump_id)?;
+		let timestamp_json = serde_json::to_string(timestamp)?;
+
+		// Start building the Cypher script
+		let mut cypher = format!(
+			"MERGE (d:Dump {{id: {}}}) ON CREATE SET d.received_at = {}",
+			dump_id_json, timestamp_json
+		);
+
+		// Create row node with optional row_hash
+		if let Some(hash) = row_hash {
+			let hash_json = serde_json::to_string(hash)?;
+			cypher.push_str(&format!(
+				"\nCREATE (r:Row {{dump_id: {}, index: {}, row_hash: {}}}))",
+				dump_id_json, row_index, hash_json
+			));
+		} else {
+			cypher.push_str(&format!(
+				"\nCREATE (r:Row {{dump_id: {}, index: {}}})",
+				dump_id_json, row_index
+			));
+		}
+		cypher.push_str("\nCREATE (d)-[:HAS_ROW]->(r)");
+
+		// Process each cell
+		for (i, (column, raw, canonical_key, canonical_value)) in cells.iter().enumerate() {
+			let column_json = serde_json::to_string(column)?;
+			let raw_json = serde_json::to_string(raw)?;
+			let canonical_key_json = serde_json::to_string(canonical_key)?;
+			let canonical_value_json = serde_json::to_string(canonical_value)?;
+
+			// Use unique variable names for each cell
+			let fv_var = format!("fv{}", i);
+			let f_var = format!("f{}", i);
+			let s_var = format!("s{}", i);
+
+			cypher.push_str(&format!(
+				"\nMERGE ({}:FieldValue {{canonical_key: {}}}) ON CREATE SET {}.value = {}, {}.created_at = {}",
+				fv_var, canonical_key_json, fv_var, canonical_value_json, fv_var, timestamp_json
+			));
+			cypher.push_str(&format!(
+				"\nMERGE ({}:Field {{name: {}}})",
+				f_var, column_json
+			));
+			cypher.push_str(&format!("\nMERGE ({})-[:VALUE_OF]->({})", fv_var, f_var));
+			cypher.push_str(&format!(
+				"\nCREATE ({}:Sighting {{column: {}, raw: {}, timestamp: {}}})",
+				s_var, column_json, raw_json, timestamp_json
+			));
+			cypher.push_str(&format!("\nCREATE (r)-[:HAS_SIGHTING]->({})", s_var));
+			cypher.push_str(&format!(
+				"\nCREATE ({})-[:OBSERVED_VALUE]->({})",
+				s_var, fv_var
+			));
+		}
+
+		cypher.push_str("\nRETURN r");
+
+		// Execute the Cypher script
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+		sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await?;
+
+		Ok(())
+	}
+
+	/// Increment co-occurrence count between two canonical values.
+	///
+	/// Creates or updates a CO_OCCURS relationship between two FieldValue nodes.
+	/// Uses deterministic ordering (a_key < b_key) to avoid duplicate edges.
+	pub async fn increment_co_occurrence(
+		&self,
+		a_key: &str,
+		b_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		// Ensure deterministic ordering
+		let (first, second) = if a_key < b_key {
+			(a_key, b_key)
+		} else {
+			(b_key, a_key)
+		};
+
+		let first_json = serde_json::to_string(first)?;
+		let second_json = serde_json::to_string(second)?;
+		let timestamp_json = serde_json::to_string(timestamp)?;
+
+		let cypher = format!(
+			"MERGE (a:FieldValue {{canonical_key: {}}}) \
+			 MERGE (b:FieldValue {{canonical_key: {}}}) \
+			 MERGE (a)-[co:CO_OCCURS]-(b) \
+			 SET co.count = coalesce(co.count, 0) + 1, co.last_seen = {} \
+			 RETURN co",
+			first_json, second_json, timestamp_json
+		);
+
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+		sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await?;
+
+		Ok(())
+	}
+
+	/// Persist a credential relationship (e.g., email -> password).
+	///
+	/// Creates or updates a CREDENTIAL edge with count and last_seen tracking.
+	pub async fn persist_credential(
+		&self,
+		from_key: &str,
+		to_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		let from_json = serde_json::to_string(from_key)?;
+		let to_json = serde_json::to_string(to_key)?;
+		let timestamp_json = serde_json::to_string(timestamp)?;
+
+		let cypher = format!(
+			"MERGE (a:FieldValue {{canonical_key: {}}}) \
+			 MERGE (b:FieldValue {{canonical_key: {}}}) \
+			 MERGE (a)-[c:CREDENTIAL]->(b) \
+			 SET c.count = coalesce(c.count, 0) + 1, c.last_seen = {} \
+			 RETURN c",
+			from_json, to_json, timestamp_json
+		);
+
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+		sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await?;
+
+		Ok(())
+	}
+
+	/// Apply SQL migrations from a file to set up the graph schema.
+	///
+	/// This executes raw SQL statements (including Cypher via AGE functions)
+	/// to initialize the graph structure, indices, and labels.
+	///
+	/// **Important Limitations:**
+	/// - Executes the entire SQL content as a single statement batch
+	/// - Does not parse individual statements or handle complex transaction boundaries
+	/// - Suitable for initial schema setup and idempotent migration scripts
+	/// - For production use with multiple migrations, consider using a dedicated
+	///   migration tool like `sqlx-cli` or `refinery` that supports proper
+	///   versioning, rollback, and statement-by-statement execution
+	///
+	/// **Safety:**
+	/// - Only execute trusted SQL content (typically embedded via `include_str!`)
+	/// - Never pass user-provided content to this method
+	/// - Ensure migrations are idempotent (use CREATE IF NOT EXISTS, MERGE, etc.)
+	pub async fn apply_migration(&self, sql_content: &str) -> Result<()> {
+		// Execute the SQL content directly as a batch.
+		// This works for simple DO blocks and CREATE IF NOT EXISTS statements
+		// but does not handle complex multi-statement scripts with dependencies.
+		sqlx::query(sql_content).execute(&self.pool).await?;
+		Ok(())
+	}
 }
 
 /// Trait abstraction for persistence operations so tests can substitute a
@@ -118,6 +304,27 @@ pub trait AgeRepo: Send + Sync + 'static {
 	/// a single `cypher` invocation where possible and fall back to per-item
 	/// merges on partial failure.
 	async fn merge_batch(&self, items: &[(String, String, Value)]) -> Result<()>;
+	/// Persist a single row with its cells into the graph.
+	async fn persist_row(
+		&self,
+		dump_id: &str,
+		row_index: i64,
+		row_hash: Option<&str>,
+		cells: &[(String, String, String, String)],
+		timestamp: &str,
+	) -> Result<()>;
+	/// Increment co-occurrence count between two canonical values.
+	async fn increment_co_occurrence(
+		&self,
+		a_key: &str,
+		b_key: &str,
+		timestamp: &str,
+	) -> Result<()>;
+	/// Persist a credential relationship (e.g., email -> password).
+	async fn persist_credential(&self, from_key: &str, to_key: &str, timestamp: &str)
+	-> Result<()>;
+	/// Apply SQL migrations to set up the graph schema.
+	async fn apply_migration(&self, sql_content: &str) -> Result<()>;
 }
 
 #[async_trait]
@@ -188,6 +395,39 @@ impl AgeRepo for AgeClient {
 				Ok(())
 			}
 		}
+	}
+
+	async fn persist_row(
+		&self,
+		dump_id: &str,
+		row_index: i64,
+		row_hash: Option<&str>,
+		cells: &[(String, String, String, String)],
+		timestamp: &str,
+	) -> Result<()> {
+		AgeClient::persist_row(self, dump_id, row_index, row_hash, cells, timestamp).await
+	}
+
+	async fn increment_co_occurrence(
+		&self,
+		a_key: &str,
+		b_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		AgeClient::increment_co_occurrence(self, a_key, b_key, timestamp).await
+	}
+
+	async fn persist_credential(
+		&self,
+		from_key: &str,
+		to_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		AgeClient::persist_credential(self, from_key, to_key, timestamp).await
+	}
+
+	async fn apply_migration(&self, sql_content: &str) -> Result<()> {
+		AgeClient::apply_migration(self, sql_content).await
 	}
 }
 
