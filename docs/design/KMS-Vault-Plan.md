@@ -552,12 +552,26 @@ path "transit/keys/heimdall-pii/config" {
 - Implement `KeyManagementService` trait in `src/crypto/kms.rs`:
 
 ```rust
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum KmsError {
+    #[error("KMS operation failed: {0}")]
+    OperationFailed(String),
+    #[error("Authentication failed: {0}")]
+    AuthenticationError(String),
+    #[error("Key not found: {0}")]
+    KeyNotFound(String),
+    #[error("Network error: {0}")]
+    NetworkError(String),
+}
+
 #[async_trait]
 pub trait KeyManagementService: Send + Sync {
-    async fn encrypt(&self, plaintext: &[u8], context: &EncryptionContext) -> Result<EncryptedData>;
-    async fn decrypt(&self, encrypted: &EncryptedData, context: &EncryptionContext) -> Result<Vec<u8>>;
-    async fn generate_data_key(&self, key_id: &str) -> Result<DataKey>;
-    async fn rotate_key(&self, key_id: &str) -> Result<()>;
+    async fn encrypt(&self, plaintext: &[u8], context: &EncryptionContext) -> Result<EncryptedData, KmsError>;
+    async fn decrypt(&self, encrypted: &EncryptedData, context: &EncryptionContext) -> Result<Vec<u8>, KmsError>;
+    async fn generate_data_key(&self, key_id: &str) -> Result<DataKey, KmsError>;
+    async fn rotate_key(&self, key_id: &str) -> Result<(), KmsError>;
 }
 
 pub struct VaultKMS { /* ... */ }
@@ -610,12 +624,24 @@ match field.encryption_version {
 **Re-encryption Algorithm**:
 
 ```rust
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ReencryptError {
+    #[error("Repository error: {0}")]
+    RepositoryError(String),
+    #[error("KMS error: {0}")]
+    KmsError(#[from] KmsError),
+    #[error("Decryption error: {0}")]
+    DecryptionError(String),
+}
+
 async fn reencrypt_batch(
     repo: &Arc<dyn AgeRepo>,
     kms: &Arc<dyn KeyManagementService>,
     env_key: &[u8],
     batch_size: usize,
-) -> Result<usize> {
+) -> Result<usize, ReencryptError> {
     // Query for legacy encrypted fields
     let fields = repo.query_legacy_encrypted_fields(batch_size).await?;
     
