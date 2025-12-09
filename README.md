@@ -96,15 +96,26 @@ Notes:
 
 ## Configuration (important environment variables)
 
-- `HMD_HOST`, `HMD_PORT` — host and port the server binds to.
+Heimdall uses a centralized configuration module (`src/lib/server/config`) that reads from environment variables with the `HMD_` prefix. Configuration can also be loaded from an optional JSON file.
+
+Required environment variables:
+
 - `HMD_TLS_KEY`, `HMD_TLS_CERT` — TLS key and certificate paths (required).
--- `HMD_OAUTH_DISCOVERY_URL`, `HMD_OAUTH_AUTH_ID`, `HMD_OAUTH_AUTH_SECRET`,
-	`HMD_OAUTH_SCOPES` — OIDC configuration used for interactive user login (browser-based login flows). Machine-to-machine (service-to-service) integrations should use the OAuth2 Client Credentials (client credentials) flow and obtain bearer tokens from your identity provider; client credentials and service tokens should be managed securely by your deployment/secret management solution.
-- `HMD_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` —
-	database connection information.
-- `AGE_GRAPH` — logical graph name inside the AGE-enabled database.
+- `HMD_OAUTH_DISCOVERY_URL` — OAuth/OIDC discovery endpoint URL.
+- `HMD_OAUTH_H2M_ID`, `HMD_OAUTH_H2M_SECRET` — OAuth client credentials for human-to-machine (interactive user login) flows.
+- `HMD_OAUTH_M2M_ID`, `HMD_OAUTH_M2M_SECRET` — OAuth client credentials for machine-to-machine (service-to-service) integrations.
+
+Optional environment variables:
+
+- `HMD_HOST`, `HMD_PORT` — host and port the server binds to (defaults: hostname, 443).
+- `HMD_OIDC_SCOPE` — OIDC scope (default: "openid profile email").
+- `HMD_DATABASE_URL` or `PGHOST` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` — database connection information.
+- `HMD_AGE_GRAPH` — logical graph name inside the AGE-enabled database (default: "dumps_graph").
+- `HMD_COOKIE_SECRET` — cookie encryption secret (auto-generated if not provided).
 
 Keep secrets out of source control and use a secrets manager for production.
+
+For more details on the configuration module, see [CFG-001-Config-Module](docs/design/features/CFG-001-Config-Module.md) and [Implementation Roadmap](docs/design/Implementation-Roadmap.md).
 
 ## Security & Operations
 
