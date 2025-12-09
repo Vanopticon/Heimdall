@@ -131,3 +131,89 @@ async fn flush_buffer(
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use serde_json::json;
+
+	#[test]
+	fn persist_job_creation() {
+		let job = PersistJob {
+			label: "TestLabel".to_string(),
+			key: "test-key".to_string(),
+			props: json!({"field": "value"}),
+		};
+		assert_eq!(job.label, "TestLabel");
+		assert_eq!(job.key, "test-key");
+	}
+
+	#[test]
+	fn metrics_text_format() {
+		let metrics = metrics_text();
+		assert!(metrics.contains("heimdall_persist_jobs_submitted_total"));
+		assert!(metrics.contains("heimdall_persist_batch_flushes_total"));
+		assert!(metrics.contains("heimdall_persist_batch_failures_total"));
+		assert!(metrics.contains("heimdall_persist_per_item_failures_total"));
+		assert!(metrics.contains("heimdall_persist_batch_flush_latency_ms_sum"));
+		// Verify Prometheus format includes HELP and TYPE lines
+		assert!(metrics.contains("# HELP"));
+		assert!(metrics.contains("# TYPE"));
+	}
+
+	#[test]
+	fn metrics_text_includes_counter_type() {
+		let metrics = metrics_text();
+		// Verify all metrics are marked as counters
+		let type_count = metrics.matches("# TYPE").count();
+		let counter_count = metrics.matches("counter").count();
+		assert_eq!(type_count, counter_count);
+	}
+
+	#[tokio::test]
+	async fn submit_job_increments_metric() {
+		// Read initial value
+		let initial = PERSIST_JOBS_SUBMITTED.load(Ordering::Relaxed);
+
+		// Create a channel with capacity 10
+		let (tx, _rx) = mpsc::channel::<PersistJob>(10);
+
+		let job = PersistJob {
+			label: "TestLabel".to_string(),
+			key: "test-key".to_string(),
+			props: json!({}),
+		};
+
+		// Submit job
+		let result = submit_job(&tx, job);
+		assert!(result.is_ok());
+
+		// Verify metric incremented
+		let after = PERSIST_JOBS_SUBMITTED.load(Ordering::Relaxed);
+		assert_eq!(after, initial + 1);
+	}
+
+	#[tokio::test]
+	async fn submit_job_fails_when_channel_full() {
+		// Create a channel with capacity 1, fill it, then try to send another
+		let (tx, _rx) = mpsc::channel::<PersistJob>(1);
+
+		// Fill the channel
+		let job1 = PersistJob {
+			label: "TestLabel".to_string(),
+			key: "test-key-1".to_string(),
+			props: json!({}),
+		};
+		let result1 = submit_job(&tx, job1);
+		assert!(result1.is_ok());
+
+		// Try to send another job - should fail because channel is full
+		let job2 = PersistJob {
+			label: "TestLabel".to_string(),
+			key: "test-key-2".to_string(),
+			props: json!({}),
+		};
+		let result2 = submit_job(&tx, job2);
+		assert!(result2.is_err());
+	}
+}

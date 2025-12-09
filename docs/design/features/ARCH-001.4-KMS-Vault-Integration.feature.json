@@ -1,0 +1,25 @@
+{
+	"category": "security",
+	"description": "Replace env-injected master keys with KMS/Vault for envelope encryption with key rotation and audit",
+	"steps": [
+		"Evaluate KMS providers (AWS KMS, GCP KMS, Azure Key Vault, HashiCorp Vault) and document pros/cons",
+		"Select primary provider (HashiCorp Vault) and document decision rationale",
+		"Deploy Vault cluster or configure cloud KMS in test environment",
+		"Create master encryption key and configure authentication backend",
+		"Implement KeyManagementService trait with Vault and cloud KMS implementations",
+		"Integrate envelope encryption into PII policy engine with KMS backend",
+		"Add backward-compatible decryption for legacy env-key encrypted data",
+		"Implement re-encryption worker to migrate existing encrypted data to KMS",
+		"Deploy hybrid-mode application supporting both legacy and KMS encryption",
+		"Execute re-encryption job and validate all data migrated to KMS",
+		"Switch to KMS-only mode and remove env-keys from configuration",
+		"Implement automated key rotation with 90-day cadence",
+		"Create operational runbooks for routine rotation and emergency compromise",
+		"Configure comprehensive audit logging for all key operations",
+		"Validate key rotation and re-encryption in staging environment",
+		"Conduct tabletop exercise for emergency key compromise scenario",
+		"Update documentation (Architecture.md, Implementation-Roadmap.md, README)",
+		"Deploy to production with KMS integration"
+	],
+	"passes": false
+}

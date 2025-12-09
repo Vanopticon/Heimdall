@@ -1,17 +1,15 @@
+mod common;
+
 use axum::body::Body;
 use axum::http::Request;
 use axum::response::IntoResponse;
-use std::env;
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 
 #[tokio::test]
 async fn e2e_ndjson_upload_persists() {
 	// This integration test is gated by an env var to avoid running Docker in CI
-	if env::var("RUN_DOCKER_INTEGRATION_TESTS").is_err() {
-		eprintln!(
-			"Skipping Docker integration e2e test; set RUN_DOCKER_INTEGRATION_TESTS=1 to enable"
-		);
+	if !common::check_docker_enabled() {
 		return;
 	}
 
@@ -21,14 +19,9 @@ async fn e2e_ndjson_upload_persists() {
 		.expect("start db");
 
 	// Wait for Postgres to accept connections
-	let pool = loop {
-		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
-			Ok(p) => break p,
-			Err(_) => {
-				sleep(Duration::from_secs(1)).await;
-			}
-		}
-	};
+	let pool = common::wait_for_postgres("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall", 30)
+		.await
+		.expect("connect to postgres");
 
 	// Build an AgeClient and shared repo
 	let client = vanopticon_heimdall::age_client::AgeClient::new(pool.clone(), "heimdall_graph");

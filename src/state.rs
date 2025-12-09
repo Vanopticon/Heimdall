@@ -11,5 +11,4 @@ use crate::observability::MetricsRegistry;
 pub struct AppState {
 	pub repo: Arc<dyn AgeRepo>,
 	pub persist_sender: tokio::sync::mpsc::Sender<crate::persist::PersistJob>,
-	pub metrics: Arc<MetricsRegistry>,
 }
