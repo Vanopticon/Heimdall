@@ -8,3 +8,9 @@ pub async fn db_health(State(state): State<crate::state::AppState>) -> impl Into
 		Err(e) => (StatusCode::SERVICE_UNAVAILABLE, format!("db error: {}", e)).into_response(),
 	}
 }
+
+/// Prometheus metrics endpoint: returns metrics in Prometheus text format
+pub async fn metrics_handler(State(state): State<crate::state::AppState>) -> impl IntoResponse {
+	let metrics_text = state.metrics.encode();
+	(StatusCode::OK, metrics_text).into_response()
+}

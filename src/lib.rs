@@ -3,6 +3,7 @@ pub mod config;
 pub mod devops;
 pub mod health;
 pub mod ingest;
+pub mod observability;
 pub mod persist;
 pub mod state;
 pub mod tls_utils;
@@ -39,6 +40,15 @@ use tower_http::trace::TraceLayer;
 /// This function intentionally logs errors rather than returning them so
 /// the simple `main` runner can call it without changing its signature.
 pub async fn run() {
+	// Initialize observability: structured logging, metrics, and tracing
+	let obs_state = match crate::observability::init_observability().await {
+		Ok(s) => s,
+		Err(e) => {
+			eprintln!("warning: failed to initialize observability: {}", e);
+			crate::observability::ObservabilityState::default()
+		}
+	};
+
 	// Load settings (fall back to defaults on error)
 	let settings = match crate::config::load() {
 		Ok(s) => s,
@@ -54,7 +64,7 @@ pub async fn run() {
 		.route("/ingest/bulk", post(crate::ingest::bulk_dump_upload))
 		.route("/health", get(|| async { "OK" }))
 		.route("/health/db", get(crate::health::db_health))
-		.route("/metrics", get(|| async { crate::persist::metrics_text() }))
+		.route("/metrics", get(crate::health::metrics_handler))
 		// Defense-in-depth: normalize paths and add conservative security headers
 		.layer(TraceLayer::new_for_http())
 		.layer(NormalizePathLayer::trim_trailing_slash())
@@ -155,6 +165,7 @@ pub async fn run() {
 
 	let sender = crate::persist::start_batcher(
 		repo.clone(),
+		obs_state.metrics.clone(),
 		persist_capacity,
 		persist_batch_size,
 		persist_flush_ms,
@@ -163,6 +174,7 @@ pub async fn run() {
 	let app_state = crate::state::AppState {
 		repo: repo.clone(),
 		persist_sender: sender,
+		metrics: obs_state.metrics.clone(),
 	};
 	let app = app.with_state(app_state);
 

@@ -34,12 +34,22 @@ async fn e2e_ndjson_upload_persists() {
 	let client = vanopticon_heimdall::age_client::AgeClient::new(pool.clone(), "heimdall_graph");
 	let repo: std::sync::Arc<dyn vanopticon_heimdall::age_client::AgeRepo> = Arc::new(client);
 
+	// Create metrics registry
+	let metrics = Arc::new(vanopticon_heimdall::observability::MetricsRegistry::new());
+
 	// Start a batcher that flushes immediately (batch_size=1)
-	let sender = vanopticon_heimdall::persist::start_batcher(repo.clone(), 1024, 1, 100);
+	let sender = vanopticon_heimdall::persist::start_batcher(
+		repo.clone(),
+		metrics.clone(),
+		1024,
+		1,
+		100,
+	);
 
 	let app_state = vanopticon_heimdall::state::AppState {
 		repo: repo.clone(),
 		persist_sender: sender.clone(),
+		metrics: metrics.clone(),
 	};
 
 	// Build NDJSON payload and call handler directly
