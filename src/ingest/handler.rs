@@ -145,7 +145,44 @@ mod tests {
 			.body(Body::from(payload.to_string()))
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
+		// Build AppState for test
+		use std::sync::Arc;
+		use tokio::sync::mpsc;
+
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+		};
+
+		let resp = ndjson_upload(axum::extract::State(app_state), req)
+			.await
+			.into_response();
 		assert_eq!(resp.status(), StatusCode::OK);
 	}
 
@@ -226,7 +263,44 @@ mod tests {
 			.body(body)
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
+		// Build AppState for test
+		use std::sync::Arc;
+		use tokio::sync::mpsc;
+
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+		};
+
+		let resp = ndjson_upload(axum::extract::State(app_state), req)
+			.await
+			.into_response();
 		assert_eq!(resp.status(), StatusCode::OK);
 
 		// Optionally parse and assert the returned JSON contains normalized entries
