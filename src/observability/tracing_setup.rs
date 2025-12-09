@@ -32,9 +32,15 @@ pub async fn init_tracing() -> anyhow::Result<()> {
 	let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
 	// Register the telemetry layer with the existing subscriber
+	// Use try_init to gracefully handle cases where a subscriber is already set
 	let subscriber = tracing_subscriber::registry().with(telemetry);
-	tracing::subscriber::set_global_default(subscriber)
-		.map_err(|e| anyhow::anyhow!("Failed to set tracing subscriber: {}", e))?;
+	if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+		// If a subscriber is already set, that's okay in test environments
+		eprintln!(
+			"Note: tracing subscriber already set (this is normal in tests): {}",
+			e
+		);
+	}
 
 	Ok(())
 }

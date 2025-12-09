@@ -152,10 +152,10 @@ pub async fn ndjson_upload(
 
 #[cfg(feature = "ingest-tests")]
 mod tests {
-	use super::*;
-	use axum::body::Body;
-	use axum::http::Request;
-	use futures_util::stream;
+	use axum::extract::State;
+	use axum::response::IntoResponse;
+	use std::sync::Arc;
+	use tokio::sync::mpsc;
 
 	#[tokio::test]
 	async fn handler_accepts_ndjson_stream() {
@@ -163,36 +163,13 @@ mod tests {
 {"field_type":"email","value":"USER@EXAMPLE.COM"}
 "#;
 
-		let req = Request::builder()
+		let req = axum::http::Request::builder()
 			.method("POST")
 			.uri("/")
-			.body(Body::from(payload.to_string()))
+			.body(axum::body::Body::from(payload.to_string()))
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
-		assert_eq!(resp.status(), StatusCode::OK);
-	}
-
-	#[tokio::test]
-	async fn bulk_dump_streaming_writes_file() {
-		// Simulate a chunked upload by building a TryStream of Bytes
-		let s = stream::iter(vec![
-			Ok::<_, std::io::Error>(b"first line\n".to_vec()),
-			Ok::<_, std::io::Error>(b"second line\n".to_vec()),
-		]);
-
-		let body = Body::from_stream(s);
-
-		let req = Request::builder()
-			.method("POST")
-			.uri("/")
-			.body(body)
-			.unwrap();
-
-		// Build a minimal AppState for the handler's State extractor
-		use std::sync::Arc;
-		use tokio::sync::mpsc;
-
+		// Build test state
 		struct DummyRepo;
 		#[async_trait::async_trait]
 		impl crate::age_client::AgeRepo for DummyRepo {
@@ -226,16 +203,72 @@ mod tests {
 			metrics,
 		};
 
-		let resp = bulk_dump_upload(axum::extract::State(app_state), req)
+		let resp = super::ndjson_upload(State(app_state), req)
 			.await
 			.into_response();
-		assert_eq!(resp.status(), StatusCode::OK);
+		assert_eq!(resp.status(), axum::http::StatusCode::OK);
+	}
+
+	#[tokio::test]
+	async fn bulk_dump_streaming_writes_file() {
+		// Simulate a chunked upload by building a TryStream of Bytes
+		let s = futures_util::stream::iter(vec![
+			Ok::<_, std::io::Error>(b"first line\n".to_vec()),
+			Ok::<_, std::io::Error>(b"second line\n".to_vec()),
+		]);
+
+		let body = axum::body::Body::from_stream(s);
+
+		let req = axum::http::Request::builder()
+			.method("POST")
+			.uri("/")
+			.body(body)
+			.unwrap();
+
+		// Build a minimal AppState for the handler's State extractor
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let metrics = Arc::new(crate::observability::MetricsRegistry::new());
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+			metrics,
+		};
+
+		let resp = super::bulk_dump_upload(State(app_state), req)
+			.await
+			.into_response();
+		assert_eq!(resp.status(), axum::http::StatusCode::OK);
 	}
 
 	#[tokio::test]
 	async fn ndjson_streaming_chunked_lines() {
 		// Simulate a NDJSON upload where a single JSON object is split across chunks
-		let s = stream::iter(vec![
+		let s = futures_util::stream::iter(vec![
 			Ok::<_, std::io::Error>(b"{".to_vec()),
 			Ok::<_, std::io::Error>(b"\"field_type\":\"domain\",\"value\":\"Exa".to_vec()),
 			Ok::<_, std::io::Error>(b"mple.COM\"}\n{".to_vec()),
@@ -244,16 +277,52 @@ mod tests {
 			),
 		]);
 
-		let body = Body::from_stream(s);
+		let body = axum::body::Body::from_stream(s);
 
-		let req = Request::builder()
+		let req = axum::http::Request::builder()
 			.method("POST")
 			.uri("/")
 			.body(body)
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
-		assert_eq!(resp.status(), StatusCode::OK);
+		// Build test state
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let metrics = Arc::new(crate::observability::MetricsRegistry::new());
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+			metrics,
+		};
+
+		let resp = super::ndjson_upload(State(app_state), req)
+			.await
+			.into_response();
+		assert_eq!(resp.status(), axum::http::StatusCode::OK);
 
 		// Optionally parse and assert the returned JSON contains normalized entries
 		// but for now ensure status OK and that handler didn't error on chunk boundaries.

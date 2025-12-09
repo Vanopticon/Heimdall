@@ -116,6 +116,7 @@ async fn flush_buffer(
 	let res = repo.merge_batch(&tuples).await;
 	let elapsed_ms = start.elapsed().as_millis() as f64;
 	metrics.persist_batch_flushes.inc();
+	// Histogram expects milliseconds, as per metric name
 	metrics.persist_batch_latency_ms.observe(elapsed_ms);
 
 	if let Err(e) = res {
