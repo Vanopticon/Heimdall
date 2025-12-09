@@ -1,0 +1,11 @@
+{
+	"category": "functional",
+	"description": "Enricher adapter interface, provider config, scheduler, and worker pool",
+	"passes": false,
+	"steps": [
+		"Implement adapter trait and provider config format",
+		"Implement scheduler and worker pool in src/lib/server/enrich",
+		"Add provider-level rate-limiting and resilient client helpers",
+		"Create sample adapters and integration tests"
+	]
+}
