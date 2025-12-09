@@ -70,7 +70,16 @@ The database will be available at `localhost:5432` with:
 
 - Database: `heimdall`
 - User: `heimdall`
-- Password: `heimdall` (change in production via environment variables)
+- Password: `heimdall` (default - **change for production**)
+
+**Production Security Note**: Override default database credentials by setting environment variables in your docker-compose override or environment file:
+
+```bash
+# In docker-compose.override.yml or as environment variables
+POSTGRES_PASSWORD=your-secure-password-here
+POSTGRES_USER=heimdall
+POSTGRES_DB=heimdall
+```
 
 The initialization script (`docker/postgres-age/initdb/01-extensions.sql`) automatically creates the `vector` and `ag` extensions and the `heimdall_graph` AGE graph.
 
@@ -99,8 +108,9 @@ export HMD_DATABASE_URL=postgres://heimdall:heimdall@localhost:5432/heimdall
 export HMD_AGE_GRAPH=heimdall_graph
 
 # Optional: Security (generate cookie secret once and store securely)
-# To generate a new cookie secret: openssl rand -base64 32
-export HMD_COOKIE_SECRET=your-securely-stored-cookie-secret-here
+# Generate once with: openssl rand -base64 32
+# REQUIRED: Replace GENERATE_AND_REPLACE_ME with actual secret before deployment
+export HMD_COOKIE_SECRET=GENERATE_AND_REPLACE_ME
 export HMD_OIDC_SCOPE="openid profile email"
 ```
 
@@ -275,11 +285,14 @@ DATE=$(date +%Y%m%d_%H%M%S)
 PGHOST=localhost
 PGDATABASE=heimdall
 PGUSER=heimdall
+# Set POSTGRES_PASSWORD via environment or .pgpass file
+# For sidecar: use the password from docker-compose.yml or override
+# Example: export POSTGRES_PASSWORD="your-db-password"
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Perform backup
+# Perform backup (POSTGRES_PASSWORD should be set in environment)
 PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
   -h "$PGHOST" \
   -U "$PGUSER" \
@@ -315,9 +328,12 @@ BACKUP_DIR=/var/backups/heimdall/base
 DATE=$(date +%Y%m%d_%H%M%S)
 PGHOST=localhost
 PGUSER=heimdall
+# Set POSTGRES_PASSWORD via environment or .pgpass file
+# Example: export POSTGRES_PASSWORD="your-db-password"
 
 mkdir -p "$BACKUP_DIR"
 
+# POSTGRES_PASSWORD should be set in environment
 PGPASSWORD="${POSTGRES_PASSWORD}" pg_basebackup \
   -h "$PGHOST" \
   -U "$PGUSER" \
@@ -494,11 +510,12 @@ HMD_DATABASE_URL=postgres://heimdall:PASSWORD@localhost:5432/heimdall
 HMD_AGE_GRAPH=heimdall_graph
 HMD_HOST=0.0.0.0
 HMD_PORT=443
-# Optional: Generate with: openssl rand -base64 32
-# HMD_COOKIE_SECRET=your-securely-stored-cookie-secret-here
+# Optional: Generate cookie secret once with: openssl rand -base64 32
+# REQUIRED: Replace GENERATE_AND_REPLACE_ME with actual secret before deployment
+# HMD_COOKIE_SECRET=GENERATE_AND_REPLACE_ME
 ```
 
-**Note**: Store sensitive values (OAuth secrets, database passwords, cookie secrets) in the environment file. Generate cookie secret once: `openssl rand -base64 32` and store it securely.
+**Security Note**: Store sensitive values (OAuth secrets, database passwords, cookie secrets) securely. Replace placeholder values (PASSWORD, GENERATE_AND_REPLACE_ME, etc.) with actual secrets. Generate cookie secret once: `openssl rand -base64 32` and store it securely. Never use placeholder values in production.
 
 Set permissions:
 
