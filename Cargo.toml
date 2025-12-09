@@ -13,8 +13,10 @@ axum = { version = "0.8.7", features = ["http2", "macros", "multipart"] }
 clap = { version = "4.5.53", features = ["derive", "env", "string", "unicode"] }
 config = "0.15.19"
 # Ingest / normalization utilities
+chrono = { version = "0.4", features = ["serde"] }
 csv = "1.1.7"
 dirs = "6.0.0"
+idna = "1.0"
 fern = { version = "0.7.1", features = ["colored", "date-based"] }
 flate2 = "1.0"
 futures-util = "0.3"
