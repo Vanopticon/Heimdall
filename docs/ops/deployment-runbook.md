@@ -512,12 +512,12 @@ HMD_DATABASE_URL=postgres://heimdall:REPLACE_WITH_DB_PASSWORD@localhost:5432/hei
 HMD_AGE_GRAPH=heimdall_graph
 HMD_HOST=0.0.0.0
 HMD_PORT=443
-# Optional: Generate cookie secret once with: openssl rand -base64 32
-# REQUIRED: Replace GENERATE_AND_REPLACE_ME with actual secret before deployment
-# HMD_COOKIE_SECRET=GENERATE_AND_REPLACE_ME
+# REQUIRED: Generate cookie secret with: openssl rand -base64 32
+# Replace GENERATE_AND_REPLACE_ME with the generated secret
+HMD_COOKIE_SECRET=GENERATE_AND_REPLACE_ME
 ```
 
-**Security Note**: Store sensitive values (OAuth secrets, database passwords, cookie secrets) securely. Replace **all** placeholder values (REPLACE_WITH_*, GENERATE_AND_REPLACE_ME, etc.) with actual secrets before deployment. Generate cookie secret once: `openssl rand -base64 32` and store it securely. Never use placeholder or example values in production.
+**Security Note**: Store sensitive values (OAuth secrets, database passwords, cookie secrets) securely. Replace **all** placeholder values (REPLACE_WITH_*, GENERATE_AND_REPLACE_ME, etc.) with actual secrets before deployment. The cookie secret is **required** for secure session management - generate it with `openssl rand -base64 32` and replace the placeholder. Never use placeholder or example values in production.
 
 Set permissions:
 
