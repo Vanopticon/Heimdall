@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::age_client::AgeRepo;
-use crate::pii::pii_policy::PiiPolicyEngine;
+use crate::observability::MetricsRegistry;
 
 /// Application state passed to handlers via Axum's `State` extractor.
 ///
@@ -11,5 +11,4 @@ use crate::pii::pii_policy::PiiPolicyEngine;
 pub struct AppState {
 	pub repo: Arc<dyn AgeRepo>,
 	pub persist_sender: tokio::sync::mpsc::Sender<crate::persist::PersistJob>,
-	pub pii_engine: Option<Arc<PiiPolicyEngine>>,
 }

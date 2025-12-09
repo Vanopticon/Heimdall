@@ -1,0 +1,11 @@
+{
+	"category": "non-functional",
+	"description": "Deployment runbook for Linux hosts with Postgres+AGE guidance",
+	"steps": [
+		"Draft docs/ops/deployment-runbook.md with step-by-step instructions",
+		"Provide Postgres+AGE provisioning and backup guidance",
+		"Include TLS bootstrap and certificate rotation notes",
+		"Review and validate with repository owners"
+	],
+	"passes": true
+}

@@ -83,6 +83,14 @@ Optional environment variables:
 - `HMD_AGE_GRAPH` — logical graph name inside the AGE-enabled database (default: "dumps_graph").
 - `HMD_COOKIE_SECRET` — cookie encryption secret (auto-generated if not provided).
 
+Sync configuration (for multi-Heimdall synchronization):
+
+- `HMD_SYNC_ENABLED` — enable sync agent (default: false).
+- `HMD_SYNC_NODE_ID` — unique node identifier (default: hostname-based).
+- `HMD_OIDC_DISCOVERY_URL` — OIDC discovery endpoint for peer authentication.
+- `HMD_OIDC_CLIENT_ID` — OIDC client ID for sync agent.
+- `HMD_OIDC_CLIENT_SECRET` — OIDC client secret for sync agent.
+
 Keep secrets out of source control and use a secrets manager for production.
 
 For more details on the configuration module, see [CFG-001-Config-Module](docs/design/features/CFG-001-Config-Module.md) and [Implementation Roadmap](docs/design/Implementation-Roadmap.md).
@@ -102,8 +110,52 @@ Operational checklist for deployment:
 
 ## Tests and Quality
 
-- Unit, integration, and e2e tests are implemented with Rust test harnesses. Integration tests run against an ephemeral Postgres+AGE instance (Docker Compose).
-- Run `cargo test` for unit/integration tests. See `docs/design/Implementation-Roadmap.md` for testing expectations.
+Heimdall has comprehensive test coverage including unit, integration, e2e, and security-focused tests.
+
+### Test Categories
+
+- **Unit Tests** (35 tests): Test individual functions and modules in isolation
+	- Core sanitization functions (injection prevention)
+	- Metrics and persistence logic
+	- Health check endpoints
+	- Configuration parsing
+- **Integration Tests** (5 tests): Test component interactions with ephemeral Postgres+AGE
+	- Database lifecycle management
+	- End-to-end data flows
+	- TLS certificate validation
+	- Security: Cypher injection prevention
+	- Security: Resource exhaustion protection
+
+### Running Tests
+
+```bash
+# Run unit tests only (default)
+cargo test
+
+# Run all tests including Docker-based integration tests
+export RUN_DOCKER_INTEGRATION_TESTS=1
+cargo test
+
+# Run specific test
+cargo test test_name
+
+# Run tests with verbose output
+cargo test -- --nocapture
+```
+
+### Test Requirements
+
+- Integration tests require Docker to run ephemeral Postgres+AGE instances
+- Set `RUN_DOCKER_INTEGRATION_TESTS=1` to enable Docker-based integration tests
+- All tests are idempotent and clean up after themselves
+
+### Coverage & Quality Standards
+
+- Target: 70%+ line coverage for core modules
+- All new code must include tests (positive, negative, security cases)
+- CI enforces: format checks, linting, and all tests must pass
+
+See `docs/design/TEST-COVERAGE-ANALYSIS.md` for detailed coverage tracking and `docs/design/CI-GATING-RULES.md` for CI requirements.
 
 ## Contributing
 
@@ -133,9 +185,10 @@ Operational checklist for deployment:
 	high-security deployments.
 
 - Metrics: A lightweight Prometheus-compatible `/metrics` endpoint is
-	exposed by the dev server that reports simple persistence metrics
-	(jobs submitted, batch flushes, failures, and cumulative batch
-	latency). This is intentionally minimal to avoid adding another
+	exposed by the dev server that reports persistence and sync metrics
+	(jobs submitted, batch flushes, failures, cumulative batch latency,
+	sync operations, entries sent/received, reconnections, and auth
+	failures). This is intentionally minimal to avoid adding another
 	runtime dependency; integrate a Prometheus client if you need richer
 	metric types and labels.
 
@@ -144,6 +197,7 @@ Operational checklist for deployment:
 - `src/main.rs` — CLI and runtime entrypoint.
 - `src/age_client.rs` — Postgres+AGE helper client.
 - `src/ingest/` — ingest handlers and parsers (NDJSON/CSV, streaming helpers).
+- `src/sync/` — sync agent for multi-Heimdall replication (TLS 1.3 + OIDC auth).
 - `src/devops/` — dev DB helpers and docker helpers.
 - `sql/v1` — SQL schema for the canonical graph model.
 
