@@ -16,6 +16,15 @@ use crate::sync::auth::OidcProvider;
 /// Maximum size for a single change log entry (10MB)
 const MAX_ENTRY_SIZE: usize = 10 * 1024 * 1024;
 
+/// Global sync metrics instance
+static GLOBAL_SYNC_METRICS: once_cell::sync::Lazy<SyncMetrics> =
+	once_cell::sync::Lazy::new(|| SyncMetrics::default());
+
+/// Get a reference to the global sync metrics
+pub fn global_sync_metrics() -> &'static SyncMetrics {
+	&GLOBAL_SYNC_METRICS
+}
+
 /// Change log entry representing a single write operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChangeLogEntry {
