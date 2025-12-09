@@ -1,5 +1,6 @@
+mod common;
+
 use serde_json::json;
-use std::env;
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 
@@ -9,10 +10,7 @@ use tokio::time::{Duration, sleep};
 #[tokio::test]
 async fn e2e_enrichment_mock_workflow() {
 	// Gate the test
-	if env::var("RUN_DOCKER_INTEGRATION_TESTS").is_err() {
-		eprintln!(
-			"Skipping Docker integration test; set RUN_DOCKER_INTEGRATION_TESTS=1 to enable"
-		);
+	if !common::check_docker_enabled() {
 		return;
 	}
 
@@ -22,14 +20,9 @@ async fn e2e_enrichment_mock_workflow() {
 		.expect("start db");
 
 	// Wait for Postgres to accept connections
-	let pool = loop {
-		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
-			Ok(p) => break p,
-			Err(_) => {
-				sleep(Duration::from_secs(1)).await;
-			}
-		}
-	};
+	let pool = common::wait_for_postgres("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall", 30)
+		.await
+		.expect("connect to postgres");
 
 	// Build an AgeClient and shared repo
 	let client = vanopticon_heimdall::age_client::AgeClient::new(pool.clone(), "heimdall_graph");
@@ -97,9 +90,10 @@ async fn e2e_enrichment_mock_workflow() {
 	
 	// Verify IP address node
 	let ip_sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+	let escaped_ip = common::escape_cypher_string(ip_address);
 	let ip_cypher = format!(
 		"MATCH (n:IPAddress {{canonical_key: \"{}\"}}) RETURN n LIMIT 1",
-		ip_address
+		escaped_ip
 	);
 	let ip_row = sqlx::query(ip_sql)
 		.bind("heimdall_graph")
@@ -112,7 +106,7 @@ async fn e2e_enrichment_mock_workflow() {
 	// Verify GeoIP enrichment node
 	let geoip_cypher = format!(
 		"MATCH (n:GeoIPEnrichment {{ip_address: \"{}\"}}) RETURN n LIMIT 1",
-		ip_address
+		escaped_ip
 	);
 	let geoip_row = sqlx::query(ip_sql)
 		.bind("heimdall_graph")
@@ -125,7 +119,7 @@ async fn e2e_enrichment_mock_workflow() {
 	// Verify ASN enrichment node
 	let asn_cypher = format!(
 		"MATCH (n:ASNEnrichment {{ip_address: \"{}\"}}) RETURN n LIMIT 1",
-		ip_address
+		escaped_ip
 	);
 	let asn_row = sqlx::query(ip_sql)
 		.bind("heimdall_graph")
@@ -146,10 +140,7 @@ async fn e2e_enrichment_mock_workflow() {
 #[tokio::test]
 async fn e2e_chained_enrichment() {
 	// Gate the test
-	if env::var("RUN_DOCKER_INTEGRATION_TESTS").is_err() {
-		eprintln!(
-			"Skipping Docker integration test; set RUN_DOCKER_INTEGRATION_TESTS=1 to enable"
-		);
+	if !common::check_docker_enabled() {
 		return;
 	}
 
@@ -159,14 +150,9 @@ async fn e2e_chained_enrichment() {
 		.expect("start db");
 
 	// Wait for Postgres to accept connections
-	let pool = loop {
-		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
-			Ok(p) => break p,
-			Err(_) => {
-				sleep(Duration::from_secs(1)).await;
-			}
-		}
-	};
+	let pool = common::wait_for_postgres("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall", 30)
+		.await
+		.expect("connect to postgres");
 
 	// Build an AgeClient and shared repo
 	let client = vanopticon_heimdall::age_client::AgeClient::new(pool.clone(), "heimdall_graph");
@@ -242,10 +228,14 @@ async fn e2e_chained_enrichment() {
 	// Verify all nodes exist
 	let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
 	
+	// Escape values for use in Cypher queries
+	let escaped_domain = common::escape_cypher_string(domain);
+	let escaped_ip = common::escape_cypher_string(discovered_ip);
+	
 	// Verify domain
 	let domain_cypher = format!(
 		"MATCH (n:Domain {{canonical_key: \"{}\"}}) RETURN n LIMIT 1",
-		domain
+		escaped_domain
 	);
 	let domain_row = sqlx::query(sql)
 		.bind("heimdall_graph")
@@ -258,7 +248,7 @@ async fn e2e_chained_enrichment() {
 	// Verify DNS enrichment
 	let dns_cypher = format!(
 		"MATCH (n:DNSEnrichment {{domain: \"{}\"}}) RETURN n LIMIT 1",
-		domain
+		escaped_domain
 	);
 	let dns_row = sqlx::query(sql)
 		.bind("heimdall_graph")
@@ -271,7 +261,7 @@ async fn e2e_chained_enrichment() {
 	// Verify discovered IP
 	let ip_cypher = format!(
 		"MATCH (n:IPAddress {{canonical_key: \"{}\"}}) RETURN n LIMIT 1",
-		discovered_ip
+		escaped_ip
 	);
 	let ip_row = sqlx::query(sql)
 		.bind("heimdall_graph")
@@ -284,7 +274,7 @@ async fn e2e_chained_enrichment() {
 	// Verify GeoIP enrichment for discovered IP
 	let geoip_cypher = format!(
 		"MATCH (n:GeoIPEnrichment {{ip_address: \"{}\"}}) RETURN n LIMIT 1",
-		discovered_ip
+		escaped_ip
 	);
 	let geoip_row = sqlx::query(sql)
 		.bind("heimdall_graph")

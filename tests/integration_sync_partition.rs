@@ -1,5 +1,6 @@
+mod common;
+
 use serde_json::json;
-use std::env;
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 
@@ -9,10 +10,7 @@ use tokio::time::{Duration, sleep};
 #[tokio::test]
 async fn e2e_sync_partition_basic() {
 	// Gate the test
-	if env::var("RUN_DOCKER_INTEGRATION_TESTS").is_err() {
-		eprintln!(
-			"Skipping Docker integration test; set RUN_DOCKER_INTEGRATION_TESTS=1 to enable"
-		);
+	if !common::check_docker_enabled() {
 		return;
 	}
 
@@ -22,14 +20,9 @@ async fn e2e_sync_partition_basic() {
 		.expect("start db");
 
 	// Wait for Postgres to accept connections
-	let pool = loop {
-		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
-			Ok(p) => break p,
-			Err(_) => {
-				sleep(Duration::from_secs(1)).await;
-			}
-		}
-	};
+	let pool = common::wait_for_postgres("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall", 30)
+		.await
+		.expect("connect to postgres");
 
 	// Create two separate graphs to simulate two Heimdall instances
 	// In production, these would be separate database instances or separate AGE graphs
@@ -242,10 +235,7 @@ async fn e2e_sync_partition_basic() {
 #[tokio::test]
 async fn e2e_sync_partition_deduplication() {
 	// Gate the test
-	if env::var("RUN_DOCKER_INTEGRATION_TESTS").is_err() {
-		eprintln!(
-			"Skipping Docker integration test; set RUN_DOCKER_INTEGRATION_TESTS=1 to enable"
-		);
+	if !common::check_docker_enabled() {
 		return;
 	}
 
@@ -255,14 +245,9 @@ async fn e2e_sync_partition_deduplication() {
 		.expect("start db");
 
 	// Wait for Postgres to accept connections
-	let pool = loop {
-		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
-			Ok(p) => break p,
-			Err(_) => {
-				sleep(Duration::from_secs(1)).await;
-			}
-		}
-	};
+	let pool = common::wait_for_postgres("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall", 30)
+		.await
+		.expect("connect to postgres");
 
 	// Use default graph
 	let graph_name = "heimdall_graph";
@@ -312,9 +297,10 @@ async fn e2e_sync_partition_deduplication() {
 
 	// Verify: Only one node should exist for the shared IP
 	let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+	let escaped_ip = common::escape_cypher_string(shared_ip);
 	let cypher = format!(
 		"MATCH (n:IPAddress {{canonical_key: \"{}\"}}) RETURN n",
-		shared_ip
+		escaped_ip
 	);
 	let rows = sqlx::query(sql)
 		.bind(graph_name)
