@@ -222,16 +222,129 @@ impl AgeRepo for AgeClient {
 // `crate::state::AppState` (or pass an Arc<dyn AgeRepo>) when handlers
 // need persistence.
 
-#[cfg(feature = "integration-tests")]
+#[cfg(test)]
 mod tests {
-	use super::*;
-	use serde_json::json;
 
-	// Note: This test is a compile-time smoke test only and does not connect to a DB.
-	#[tokio::test]
-	async fn client_smoke() {
-		// connecting to a real DB is outside unit test scope here; just ensure types work
-		let url = "postgres://heimdall:heimdall@localhost/heimdall";
-		let _ = AgeClient::connect(url, "heimdall_graph").await;
+	// Helper functions to expose sanitize functions for testing
+	fn test_sanitize_prop_key(k: &str) -> String {
+		let mut out = String::new();
+		for c in k.chars() {
+			if c.is_ascii_alphanumeric() || c == '_' {
+				out.push(c);
+			} else {
+				out.push('_');
+			}
+		}
+		if out.is_empty() {
+			"prop".to_string()
+		} else {
+			out
+		}
+	}
+
+	fn test_sanitize_label(label: &str) -> String {
+		let mut out = String::new();
+		for c in label.chars() {
+			if c.is_ascii_alphanumeric() || c == '_' {
+				out.push(c);
+			}
+		}
+		if out.is_empty() {
+			"FieldValue".to_string()
+		} else {
+			out
+		}
+	}
+
+	#[test]
+	fn sanitize_prop_key_alphanumeric() {
+		assert_eq!(test_sanitize_prop_key("valid_key123"), "valid_key123");
+	}
+
+	#[test]
+	fn sanitize_prop_key_special_chars() {
+		assert_eq!(test_sanitize_prop_key("key-with-dashes"), "key_with_dashes");
+		assert_eq!(test_sanitize_prop_key("key.with.dots"), "key_with_dots");
+		assert_eq!(test_sanitize_prop_key("key:with:colons"), "key_with_colons");
+	}
+
+	#[test]
+	fn sanitize_prop_key_empty() {
+		assert_eq!(test_sanitize_prop_key(""), "prop");
+		assert_eq!(test_sanitize_prop_key("!!!"), "___");
+	}
+
+	#[test]
+	fn sanitize_prop_key_unicode() {
+		// Unicode characters are replaced with underscores, except ASCII alphanumeric and underscore
+		let result = test_sanitize_prop_key("key_with_émojis_🔥");
+		assert!(result.starts_with("key_with_"));
+		// Verify no unicode characters remain
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_prop_key_sql_injection_attempt() {
+		// SQL injection attempts should be sanitized to underscores
+		let result = test_sanitize_prop_key("'; DROP TABLE users; --");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+		assert!(result.contains("DROP_TABLE_users"));
+	}
+
+	#[test]
+	fn sanitize_label_alphanumeric() {
+		assert_eq!(test_sanitize_label("ValidLabel"), "ValidLabel");
+		assert_eq!(test_sanitize_label("Label_123"), "Label_123");
+	}
+
+	#[test]
+	fn sanitize_label_special_chars() {
+		assert_eq!(test_sanitize_label("Label-With-Dashes"), "LabelWithDashes");
+		assert_eq!(test_sanitize_label("Label.With.Dots"), "LabelWithDots");
+	}
+
+	#[test]
+	fn sanitize_label_empty() {
+		assert_eq!(test_sanitize_label(""), "FieldValue");
+		assert_eq!(test_sanitize_label("!!!"), "FieldValue");
+	}
+
+	#[test]
+	fn sanitize_label_cypher_injection_attempt() {
+		assert_eq!(test_sanitize_label("Label'); MATCH (n)--"), "LabelMATCHn");
+	}
+
+	#[test]
+	fn sanitize_label_unicode() {
+		// Unicode characters are removed, keeping only ASCII alphanumeric and underscore
+		let result = test_sanitize_label("Label_with_émojis_🔥");
+		assert!(result.starts_with("Label_with_"));
+		// Verify only ASCII alphanumeric and underscore remain
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[cfg(feature = "integration-tests")]
+	mod integration {
+		use super::*;
+
+		// Note: This test is a compile-time smoke test only and does not connect to a DB.
+		#[tokio::test]
+		async fn client_smoke() {
+			// connecting to a real DB is outside unit test scope here; just ensure types work
+			let url = "postgres://heimdall:heimdall@localhost/heimdall";
+			let _ = AgeClient::connect(url, "heimdall_graph").await;
+		}
 	}
 }

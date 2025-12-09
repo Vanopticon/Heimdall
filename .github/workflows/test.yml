@@ -23,19 +23,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          node-version: 20
+          toolchain: stable
+          components: rustfmt, clippy
 
-      - name: Install pnpm
-        run: npm install -g pnpm
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Run SvelteKit sync
-        run: npx tsx node_modules/@sveltejs/kit/src/cli.js sync
+      - name: Build
+        run: cargo build --workspace --verbose
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run unit tests
+        run: cargo test --verbose
+
+  integration:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Run integration tests with Docker
+        env:
+          RUN_DOCKER_INTEGRATION_TESTS: 1
+        run: cargo test --features integration-tests --verbose
