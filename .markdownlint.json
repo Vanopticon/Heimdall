@@ -1,7 +1,7 @@
 {
 	"$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint/main/schema/markdownlint-config-schema.json",
 	"blanks-around-fences": true,
-	"blanks-around-lists": false,
+	"blanks-around-lists": true,
 	"blanks-around-tables": true,
 	"code-block-style": {
 		"style": "fenced"
@@ -14,7 +14,7 @@
 		"style": "underscore"
 	},
 	"fenced-code-language": true,
-	"first-line-heading": false,
+	"first-line-heading": true,
 	"heading-increment": true,
 	"heading-start-left": true,
 	"heading-style": {
@@ -43,7 +43,9 @@
 	"no-alt-text": true,
 	"no-bare-urls": true,
 	"no-blanks-blockquote": true,
-	"no-duplicate-heading": false,
+	"no-duplicate-heading": {
+		"siblings_only": true
+	},
 	"no-emphasis-as-heading": true,
 	"no-empty-links": true,
 	"no-hard-tabs": false,
@@ -65,8 +67,8 @@
 		"style": "ordered"
 	},
 	"reference-links-images": true,
-	"single-h1": false,
-	"single-title": false,
+	"single-h1": true,
+	"single-title": true,
 	"single-trailing-newline": true,
 	"strong-style": {
 		"style": "asterisk"
