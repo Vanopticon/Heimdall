@@ -4,6 +4,9 @@ pub mod handler;
 pub mod ndjson;
 pub mod parsers;
 
+#[cfg(test)]
+pub mod test_utils;
+
 pub use bulk_normalizer::NormalizedRecord;
 pub use format_detection::{detect_format, FormatType};
 pub use handler::{bulk_dump_upload, multipart_upload, ndjson_upload};

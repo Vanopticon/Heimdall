@@ -7,5 +7,5 @@
 		"Implement format detection and user hint overrides",
 		"Add unit and integration tests for streaming parsing"
 	],
-	"passes": false
+	"passes": true
 }

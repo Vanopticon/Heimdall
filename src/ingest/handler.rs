@@ -135,6 +135,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn handler_accepts_ndjson_stream() {
+		use crate::ingest::test_utils;
+
 		let payload = r#"{"field_type":"domain","value":"Example.COM"}
 {"field_type":"email","value":"USER@EXAMPLE.COM"}
 "#;
@@ -145,40 +147,7 @@ mod tests {
 			.body(Body::from(payload.to_string()))
 			.unwrap();
 
-		// Build AppState for test
-		use std::sync::Arc;
-		use tokio::sync::mpsc;
-
-		struct DummyRepo;
-		#[async_trait::async_trait]
-		impl crate::age_client::AgeRepo for DummyRepo {
-			async fn merge_entity(
-				&self,
-				_label: &str,
-				_key: &str,
-				_props: &serde_json::Value,
-			) -> anyhow::Result<()> {
-				Ok(())
-			}
-
-			async fn ping(&self) -> anyhow::Result<()> {
-				Ok(())
-			}
-
-			async fn merge_batch(
-				&self,
-				_items: &[(String, String, serde_json::Value)],
-			) -> anyhow::Result<()> {
-				Ok(())
-			}
-		}
-
-		let (tx, _rx) = mpsc::channel(16);
-		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
-		let app_state = crate::state::AppState {
-			repo,
-			persist_sender: tx,
-		};
+		let app_state = test_utils::create_test_app_state();
 
 		let resp = ndjson_upload(axum::extract::State(app_state), req)
 			.await
@@ -202,40 +171,8 @@ mod tests {
 			.body(body)
 			.unwrap();
 
-		// Build a minimal AppState for the handler's State extractor
-		use std::sync::Arc;
-		use tokio::sync::mpsc;
-
-		struct DummyRepo;
-		#[async_trait::async_trait]
-		impl crate::age_client::AgeRepo for DummyRepo {
-			async fn merge_entity(
-				&self,
-				_label: &str,
-				_key: &str,
-				_props: &serde_json::Value,
-			) -> anyhow::Result<()> {
-				Ok(())
-			}
-
-			async fn ping(&self) -> anyhow::Result<()> {
-				Ok(())
-			}
-
-			async fn merge_batch(
-				&self,
-				_items: &[(String, String, serde_json::Value)],
-			) -> anyhow::Result<()> {
-				Ok(())
-			}
-		}
-
-		let (tx, _rx) = mpsc::channel(16);
-		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
-		let app_state = crate::state::AppState {
-			repo,
-			persist_sender: tx,
-		};
+		use crate::ingest::test_utils;
+		let app_state = test_utils::create_test_app_state();
 
 		let resp = bulk_dump_upload(axum::extract::State(app_state), req)
 			.await
@@ -245,6 +182,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn ndjson_streaming_chunked_lines() {
+		use crate::ingest::test_utils;
+
 		// Simulate a NDJSON upload where a single JSON object is split across chunks
 		let s = stream::iter(vec![
 			Ok::<_, std::io::Error>(b"{".to_vec()),
@@ -263,40 +202,7 @@ mod tests {
 			.body(body)
 			.unwrap();
 
-		// Build AppState for test
-		use std::sync::Arc;
-		use tokio::sync::mpsc;
-
-		struct DummyRepo;
-		#[async_trait::async_trait]
-		impl crate::age_client::AgeRepo for DummyRepo {
-			async fn merge_entity(
-				&self,
-				_label: &str,
-				_key: &str,
-				_props: &serde_json::Value,
-			) -> anyhow::Result<()> {
-				Ok(())
-			}
-
-			async fn ping(&self) -> anyhow::Result<()> {
-				Ok(())
-			}
-
-			async fn merge_batch(
-				&self,
-				_items: &[(String, String, serde_json::Value)],
-			) -> anyhow::Result<()> {
-				Ok(())
-			}
-		}
-
-		let (tx, _rx) = mpsc::channel(16);
-		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
-		let app_state = crate::state::AppState {
-			repo,
-			persist_sender: tx,
-		};
+		let app_state = test_utils::create_test_app_state();
 
 		let resp = ndjson_upload(axum::extract::State(app_state), req)
 			.await

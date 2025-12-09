@@ -67,10 +67,11 @@ pub fn detect_format(peek: &[u8], hint: Option<&str>) -> Result<(FormatType, boo
 	}
 
 	// Check for Excel (XLSX) magic bytes - XLSX is a ZIP file with specific structure
-	// We already checked for generic ZIP above, so check for Office Open XML signature
+	// Note: XLSX files are ZIP archives. To distinguish XLSX from generic ZIP, we would
+	// need to extract and check for Office Open XML structure ([Content_Types].xml, etc.).
+	// For now, we treat all ZIP files as generic ZIP and rely on user hints to specify
+	// "xlsx" format when uploading Excel files. This is documented as a known limitation.
 	if peek.len() >= 4 && peek[0] == 0x50 && peek[1] == 0x4b {
-		// Could be XLSX or generic ZIP - for now, treat as ZIP and let parser handle it
-		// Better heuristic: check if it contains typical XLSX structure
 		return Ok((FormatType::Zip, true));
 	}
 

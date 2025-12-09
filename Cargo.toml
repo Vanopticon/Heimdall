@@ -47,6 +47,7 @@ tower = { version = "0.5.2", features = ["full", "log", "tokio", "tokio-stream"]
 tower-http = { version = "0.6.7", features = ["full", "sensitive-headers"] }
 url = { version = "2.5.7", features = ["serde"] }
 x509-parser = "0.15"
+# zip 2.3.0+ addresses GHSA-9w5j-4mwv-2wj8 (path canonicalization vulnerability)
 zip = "2.3.0"
 
 [dev-dependencies]

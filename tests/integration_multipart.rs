@@ -27,6 +27,9 @@ mod multipart_tests {
 		);
 
 		// Build a simple AppState for testing
+		// Note: We would use vanopticon_heimdall::ingest::test_utils here, but test_utils
+		// is only compiled in test mode within the library, not for integration tests.
+		// For integration tests, we create a minimal inline implementation.
 		use std::sync::Arc;
 		use tokio::sync::mpsc;
 
@@ -56,7 +59,7 @@ mod multipart_tests {
 
 		let (tx, _rx) = mpsc::channel(16);
 		let repo: Arc<dyn vanopticon_heimdall::age_client::AgeRepo> = Arc::new(DummyRepo);
-		let app_state = vanopticon_heimdall::state::AppState {
+		let _app_state = vanopticon_heimdall::state::AppState {
 			repo,
 			persist_sender: tx,
 		};
