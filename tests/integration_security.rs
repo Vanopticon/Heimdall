@@ -122,10 +122,16 @@ async fn security_resource_exhaustion_protection() {
 		.await
 		.expect("start db");
 
+	// Wait for Postgres to accept connections with a maximum retry limit
+	let mut attempts = 0;
 	let pool = loop {
 		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
 			Ok(p) => break p,
 			Err(_) => {
+				attempts += 1;
+				if attempts > 30 {
+					panic!("Postgres did not become ready in time");
+				}
 				sleep(Duration::from_secs(1)).await;
 			}
 		}
