@@ -1,9 +1,15 @@
 pub mod bulk_normalizer;
+pub mod format_detection;
 pub mod handler;
 pub mod ndjson;
+pub mod parsers;
+
+#[cfg(test)]
+pub mod test_utils;
 
 pub use bulk_normalizer::NormalizedRecord;
-pub use handler::{bulk_dump_upload, ndjson_upload};
+pub use format_detection::{detect_format, FormatType};
+pub use handler::{bulk_dump_upload, multipart_upload, ndjson_upload};
 pub use ndjson::{normalize_ndjson, normalize_ndjson_line};
 
 #[cfg(feature = "unit-tests")]

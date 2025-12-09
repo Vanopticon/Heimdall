@@ -70,6 +70,7 @@ pub async fn run() {
 	let app = Router::new()
 		.route("/ingest/ndjson", post(crate::ingest::ndjson_upload))
 		.route("/ingest/bulk", post(crate::ingest::bulk_dump_upload))
+		.route("/ingest/multipart", post(crate::ingest::multipart_upload))
 		.route("/health", get(|| async { "OK" }))
 		.route("/health/db", get(crate::health::db_health))
 		.route("/metrics", get(|| async {
