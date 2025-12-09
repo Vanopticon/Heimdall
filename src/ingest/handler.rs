@@ -99,11 +99,26 @@ pub async fn ndjson_upload(
 	// the persistence synchronously to avoid data loss.
 	let sender = state.persist_sender.clone();
 	for rec in &records {
-		// Only persist sanitized/normalized properties. Do NOT store the
-		// original raw value here; keep raw payloads in temp files for
-		// offline analysis if required.
+		// Apply PII policy to the raw value if PII engine is configured.
+		// The raw value will be transformed according to the policy (scrub/hash/encrypt).
+		let raw_value = if let Some(ref engine) = state.pii_engine {
+			match engine.apply_policy(&rec.field_type, &rec.raw) {
+				Ok(protected) => protected,
+				Err(e) => {
+					eprintln!("PII policy application failed for {}: {}", rec.field_type, e);
+					// Fall back to scrubbing on error
+					"[REDACTED]".to_string()
+				}
+			}
+		} else {
+			rec.raw.clone()
+		};
+
+		// Only persist sanitized/normalized properties. Store the canonical
+		// value as the merge key and the PII-protected raw value.
 		let props = serde_json::json!({
 			"field_type": rec.field_type,
+			"raw": raw_value,
 		});
 
 		let job = crate::persist::PersistJob {

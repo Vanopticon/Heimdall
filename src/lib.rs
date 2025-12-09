@@ -6,6 +6,7 @@ pub mod health;
 pub mod ingest;
 pub mod observability;
 pub mod persist;
+pub mod pii;
 pub mod state;
 pub mod sync;
 pub mod tls_utils;
@@ -176,6 +177,36 @@ pub async fn run() {
 		persist_batch_size,
 		persist_flush_ms,
 	);
+
+	// Initialize PII policy engine if master key is configured
+	let pii_engine = if let Some(key_hex) = &settings.pii_master_key {
+		match crate::pii::pii_policy::PiiPolicyEngine::parse_master_key_hex(key_hex) {
+			Ok(key) => {
+				// Create a default policy config (can be extended to load from file)
+				let config = crate::pii::pii_policy::PiiPolicyConfig::default();
+				match crate::pii::pii_policy::PiiPolicyEngine::new(
+					config,
+					key,
+					"default-key-v1".to_string(),
+				) {
+					Ok(engine) => {
+						eprintln!("PII policy engine initialized");
+						Some(Arc::new(engine))
+					}
+					Err(e) => {
+						eprintln!("warning: failed to create PII engine: {}", e);
+						None
+					}
+				}
+			}
+			Err(e) => {
+				eprintln!("warning: failed to parse PII master key: {}", e);
+				None
+			}
+		}
+	} else {
+		None
+	};
 
 	let app_state = crate::state::AppState {
 		repo: repo.clone(),
