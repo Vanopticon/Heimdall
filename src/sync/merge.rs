@@ -268,17 +268,24 @@ impl MergeResolver {
 					}
 				}
 
-				// LWW for timestamp fields
+				// Handle timestamp fields
 				for field in &rule.merge_fields {
 					if field.contains("seen") || field.contains("timestamp") {
 						if let Some(remote_val) = remote_map.get(field) {
 							if let Some(local_val) = merged_map.get(field) {
-								// Keep the newer timestamp
 								if let (Some(local_ts), Some(remote_ts)) =
 									(local_val.as_u64(), remote_val.as_u64())
 								{
-									if remote_ts > local_ts {
-										merged_map.insert(field.clone(), remote_val.clone());
+									// For first_seen, keep the older timestamp
+									if field.contains("first") {
+										if remote_ts < local_ts {
+											merged_map.insert(field.clone(), remote_val.clone());
+										}
+									} else {
+										// For last_seen and other timestamps, keep the newer
+										if remote_ts > local_ts {
+											merged_map.insert(field.clone(), remote_val.clone());
+										}
 									}
 								}
 							} else {

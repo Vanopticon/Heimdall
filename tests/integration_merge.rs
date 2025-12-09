@@ -75,11 +75,11 @@ mod integration_tests {
 			VersionVector::new("node2", 1700),
 		);
 
-		// Merge should sum counts and use newer timestamps
+		// Merge should sum counts, use newer last_seen, and older first_seen
 		let merged = resolver.merge(&node1, &node2).unwrap();
 		assert_eq!(merged.props["count"], 15); // 10 + 5
-		assert_eq!(merged.props["last_seen"], 1700); // newer
-		assert_eq!(merged.props["first_seen"], 1100); // Keep first_seen from node2 (it's in merge_fields, treated as timestamp)
+		assert_eq!(merged.props["last_seen"], 1700); // newer timestamp wins
+		assert_eq!(merged.props["first_seen"], 1000); // older timestamp wins (first observation)
 		assert_eq!(merged.props["context"], "breach_B"); // LWW field, node2 is newer
 	}
 
@@ -152,7 +152,8 @@ mod integration_tests {
 		assert_eq!(merged.props["count"], 150);
 		// Last_seen should be the newer timestamp
 		assert_eq!(merged.props["last_seen"], 2100);
-		// Location is not in merge_fields, so it stays from local (node1)
+		// Location is not in merge_fields or lww_fields, so it's preserved from
+		// the local version (node1) per merge_sightings implementation
 		assert_eq!(merged.props["location"], "datacenter_A");
 	}
 
