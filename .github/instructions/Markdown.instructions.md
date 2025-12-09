@@ -1,6 +1,6 @@
 ---
 description: 'Agent directives for Markdown formatting and linting.'
-applyTo: '*.md'
+applyTo: '**/*'
 ---
 
 # Agent Directives — Markdown Formatting & Linting

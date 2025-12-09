@@ -1,5 +1,5 @@
 ---
-applyTo: '*.rs'
+applyTo: '**/*'
 ---
 
 # Rust Style Guide

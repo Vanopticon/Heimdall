@@ -1,6 +1,6 @@
 ---
 description: 'Agent directives for GitHub Actions workflows.'
-applyTo: '.github/workflows/*.yml'
+applyTo: '**/*'
 ---
 
 # Agent Directives — GitHub Actions

@@ -1,9 +1,9 @@
 ---
 description: 'Agent directives for YAML formatting and linting.'
-applyTo: '*.yaml'
+applyTo: '**/*'
 ---
 
-# Agent Directives — YAML Formatting & Linting
+# Agent Directives — YAML/YML Formatting & Linting
 
 Purpose: These directives are written for an automated coding agent that creates or modifies YAML files in this repository. They complement Prettier's YAML formatting (see `.prettierrc.json`) by enforcing content, validation, and YAML-specific conventions.
 

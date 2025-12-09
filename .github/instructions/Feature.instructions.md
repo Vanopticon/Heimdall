@@ -1,6 +1,8 @@
 ---
-applyTo: '*.feature.json'
+applyTo: '**/*'
 ---
+
+# Agent Instructions - Feature Cards
 
 Features are used to define high-level behaviors and capabilities of the system. Each feature file should contain a clear description of the feature, its category (e.g., functional, non-functional), and a series of steps that outline how the feature should behave or be tested.
 
