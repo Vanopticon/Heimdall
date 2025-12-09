@@ -11,6 +11,11 @@ pub mod state;
 pub mod sync;
 pub mod tls_utils;
 
+// Library modules
+pub mod lib {
+	pub mod normalizers;
+}
+
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
