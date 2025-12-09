@@ -4,7 +4,6 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use std::fs::File as StdFile;
 use std::io::{BufRead, BufReader, Read};
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs::File as TokioFile;
 use tokio::io::AsyncWriteExt;
@@ -503,6 +502,202 @@ fn detect_dump_type(peek: &[u8]) -> (String, String, bool) {
 	// Fallback to text
 	let preview = s.lines().take(8).collect::<Vec<_>>().join("\n");
 	("text".to_string(), preview, false)
+}
+
+/// Multipart upload endpoint: accepts multipart/form-data with streaming file uploads.
+/// Detects format, routes to appropriate parser, and normalizes records incrementally.
+pub async fn multipart_upload(
+	State(state): State<crate::state::AppState>,
+	mut multipart: axum::extract::Multipart,
+) -> impl IntoResponse {
+	use crate::ingest::format_detection::{detect_format, FormatType};
+	use crate::ingest::parsers;
+	use std::io::Cursor;
+
+	// Process each field in the multipart request
+	let mut format_hint: Option<String> = None;
+	let mut file_data: Option<Vec<u8>> = None;
+
+	while let Some(field) = multipart.next_field().await.transpose() {
+		let field = match field {
+			Ok(f) => f,
+			Err(e) => {
+				return (
+					StatusCode::BAD_REQUEST,
+					format!("failed to read multipart field: {}", e),
+				)
+					.into_response();
+			}
+		};
+
+		let name = field.name().unwrap_or("").to_string();
+
+		if name == "format" {
+			// User-provided format hint
+			let hint_bytes = match field.bytes().await {
+				Ok(b) => b,
+				Err(e) => {
+					return (
+						StatusCode::BAD_REQUEST,
+						format!("failed to read format hint: {}", e),
+					)
+						.into_response();
+				}
+			};
+			format_hint = Some(String::from_utf8_lossy(&hint_bytes).to_string());
+		} else if name == "file" {
+			// File data
+			let bytes = match field.bytes().await {
+				Ok(b) => b,
+				Err(e) => {
+					return (
+						StatusCode::BAD_REQUEST,
+						format!("failed to read file data: {}", e),
+					)
+						.into_response();
+				}
+			};
+			file_data = Some(bytes.to_vec());
+		}
+	}
+
+	let data = match file_data {
+		Some(d) => d,
+		None => {
+			return (StatusCode::BAD_REQUEST, "no file data provided").into_response();
+		}
+	};
+
+	// Detect format from peek
+	const PEEK_SIZE: usize = 64 * 1024;
+	let peek = if data.len() > PEEK_SIZE {
+		&data[..PEEK_SIZE]
+	} else {
+		&data
+	};
+
+	let (format, compressed) = match detect_format(peek, format_hint.as_deref()) {
+		Ok(f) => f,
+		Err(e) => {
+			return (
+				StatusCode::BAD_REQUEST,
+				format!("failed to detect format: {}", e),
+			)
+				.into_response();
+		}
+	};
+
+	// Handle compressed data first
+	let decompressed_data = if compressed {
+		match format {
+			FormatType::Gzip => match parsers::decompress_gzip(Cursor::new(&data)) {
+				Ok(d) => d,
+				Err(e) => {
+					return (
+						StatusCode::BAD_REQUEST,
+						format!("failed to decompress gzip: {}", e),
+					)
+						.into_response();
+				}
+			},
+			FormatType::Zip => match parsers::extract_first_zip_entry(Cursor::new(&data)) {
+				Ok(d) => d,
+				Err(e) => {
+					return (
+						StatusCode::BAD_REQUEST,
+						format!("failed to extract zip: {}", e),
+					)
+						.into_response();
+				}
+			},
+			_ => data.clone(),
+		}
+	} else {
+		data.clone()
+	};
+
+	// Parse based on detected format
+	let parse_result = match format {
+		FormatType::Csv => parsers::parse_csv_stream(Cursor::new(&decompressed_data), None),
+		FormatType::Tsv => parsers::parse_csv_stream(Cursor::new(&decompressed_data), Some(b'\t')),
+		FormatType::Ndjson | FormatType::Json => {
+			parsers::parse_ndjson_stream(Cursor::new(&decompressed_data))
+		}
+		FormatType::Xlsx => parsers::parse_xlsx_stream(Cursor::new(&decompressed_data)),
+		_ => {
+			return (
+				StatusCode::BAD_REQUEST,
+				format!("unsupported format: {}", format.as_str()),
+			)
+				.into_response();
+		}
+	};
+
+	let records = match parse_result {
+		Ok(r) => r,
+		Err(e) => {
+			return (
+				StatusCode::BAD_REQUEST,
+				format!("failed to parse data: {}", e),
+			)
+				.into_response();
+		}
+	};
+
+	// Persist records using the background batcher
+	let sender = state.persist_sender.clone();
+	for rec in &records {
+		let props = serde_json::json!({
+			"field_type": rec.field_type,
+		});
+
+		let job = crate::persist::PersistJob {
+			label: "FieldValue".to_string(),
+			key: rec.canonical.clone(),
+			props: props.clone(),
+		};
+
+		match crate::persist::submit_job(&sender, job.clone()) {
+			Ok(()) => {}
+			Err(tokio::sync::mpsc::error::TrySendError::Full(returned))
+			| Err(tokio::sync::mpsc::error::TrySendError::Closed(returned)) => {
+				// Channel unavailable; persist synchronously
+				if let Err(e) = state
+					.repo
+					.merge_entity(&returned.label, &returned.key, &returned.props)
+					.await
+				{
+					return (
+						StatusCode::INTERNAL_SERVER_ERROR,
+						format!("failed to persist record: {}", e),
+					)
+						.into_response();
+				}
+			}
+		}
+	}
+
+	#[derive(Serialize)]
+	struct Response {
+		format: String,
+		compressed: bool,
+		records_count: usize,
+	}
+
+	let resp = Response {
+		format: format.as_str().to_string(),
+		compressed,
+		records_count: records.len(),
+	};
+
+	match serde_json::to_string(&resp) {
+		Ok(body) => (StatusCode::OK, body).into_response(),
+		Err(e) => (
+			StatusCode::INTERNAL_SERVER_ERROR,
+			format!("failed to serialize response: {}", e),
+		)
+			.into_response(),
+	}
 }
 
 #[cfg(test)]

@@ -1,0 +1,11 @@
+{
+	"category": "functional",
+	"description": "Streaming multipart ingest endpoint and parsing adapters for CSV/NDJSON/XLSX/archives",
+	"steps": [
+		"Implement streaming multipart upload endpoint in src/ingest/handler.rs",
+		"Add parsing adapters for CSV, NDJSON, XLSX row streaming and compressed archives",
+		"Implement format detection and user hint overrides",
+		"Add unit and integration tests for streaming parsing"
+	],
+	"passes": false
+}
