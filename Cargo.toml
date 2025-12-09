@@ -19,6 +19,7 @@ fern = { version = "0.7.1", features = ["colored", "date-based"] }
 flate2 = "1.0"
 futures-util = "0.3"
 hostname = "0.4"
+http-body-util = "0.1"
 hyper = { version = "1.8", features = ["full"] }
 hyper-util = "0.1"
 jsonwebtoken = "9.3"
