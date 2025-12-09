@@ -61,3 +61,10 @@ As a Full-Stack operator, I want to upload large telemetry dumps in various form
 - Excel (XLSX) files require row-by-row streaming to handle large spreadsheets.
 - Format detection should be fast (sample first 64KB) and accurate.
 - Parsers should handle malformed input gracefully with clear error messages.
+
+## Security Considerations
+
+- **Dependency Security**: Uses zip 2.3.0+ which addresses GHSA-9w5j-4mwv-2wj8 (path canonicalization vulnerability in archive extraction).
+- **Memory Bounds**: All parsers implement streaming to prevent memory exhaustion attacks from large files.
+- **Input Validation**: Format detection and parsing include size limits and validation to prevent malicious input.
+- **XLSX/ZIP Limitation**: Current format detection treats XLSX files as generic ZIP archives. Users must provide "xlsx" format hint for Excel files to route to the correct parser.
