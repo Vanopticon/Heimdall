@@ -83,6 +83,14 @@ Optional environment variables:
 - `HMD_AGE_GRAPH` — logical graph name inside the AGE-enabled database (default: "dumps_graph").
 - `HMD_COOKIE_SECRET` — cookie encryption secret (auto-generated if not provided).
 
+Sync configuration (for multi-Heimdall synchronization):
+
+- `HMD_SYNC_ENABLED` — enable sync agent (default: false).
+- `HMD_SYNC_NODE_ID` — unique node identifier (default: hostname-based).
+- `HMD_OIDC_DISCOVERY_URL` — OIDC discovery endpoint for peer authentication.
+- `HMD_OIDC_CLIENT_ID` — OIDC client ID for sync agent.
+- `HMD_OIDC_CLIENT_SECRET` — OIDC client secret for sync agent.
+
 Keep secrets out of source control and use a secrets manager for production.
 
 For more details on the configuration module, see [CFG-001-Config-Module](docs/design/features/CFG-001-Config-Module.md) and [Implementation Roadmap](docs/design/Implementation-Roadmap.md).
@@ -177,9 +185,10 @@ See `docs/design/TEST-COVERAGE-ANALYSIS.md` for detailed coverage tracking and `
 	high-security deployments.
 
 - Metrics: A lightweight Prometheus-compatible `/metrics` endpoint is
-	exposed by the dev server that reports simple persistence metrics
-	(jobs submitted, batch flushes, failures, and cumulative batch
-	latency). This is intentionally minimal to avoid adding another
+	exposed by the dev server that reports persistence and sync metrics
+	(jobs submitted, batch flushes, failures, cumulative batch latency,
+	sync operations, entries sent/received, reconnections, and auth
+	failures). This is intentionally minimal to avoid adding another
 	runtime dependency; integrate a Prometheus client if you need richer
 	metric types and labels.
 
@@ -188,6 +197,7 @@ See `docs/design/TEST-COVERAGE-ANALYSIS.md` for detailed coverage tracking and `
 - `src/main.rs` — CLI and runtime entrypoint.
 - `src/age_client.rs` — Postgres+AGE helper client.
 - `src/ingest/` — ingest handlers and parsers (NDJSON/CSV, streaming helpers).
+- `src/sync/` — sync agent for multi-Heimdall replication (TLS 1.3 + OIDC auth).
 - `src/devops/` — dev DB helpers and docker helpers.
 - `sql/v1` — SQL schema for the canonical graph model.
 

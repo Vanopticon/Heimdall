@@ -5,6 +5,7 @@ pub mod health;
 pub mod ingest;
 pub mod persist;
 pub mod state;
+pub mod sync;
 pub mod tls_utils;
 
 use std::net::SocketAddr;
@@ -54,7 +55,11 @@ pub async fn run() {
 		.route("/ingest/bulk", post(crate::ingest::bulk_dump_upload))
 		.route("/health", get(|| async { "OK" }))
 		.route("/health/db", get(crate::health::db_health))
-		.route("/metrics", get(|| async { crate::persist::metrics_text() }))
+		.route("/metrics", get(|| async {
+			let mut metrics = crate::persist::metrics_text();
+			metrics.push_str(&crate::sync::global_sync_metrics().to_prometheus_text());
+			metrics
+		}))
 		// Defense-in-depth: normalize paths and add conservative security headers
 		.layer(TraceLayer::new_for_http())
 		.layer(NormalizePathLayer::trim_trailing_slash())
