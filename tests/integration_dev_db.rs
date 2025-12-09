@@ -1,12 +1,11 @@
+mod common;
+
 use serde_json::json;
-use std::env;
-use tokio::time::{Duration, sleep};
 
 #[tokio::test]
 async fn integration_dev_db_merge() {
 	// This integration test is gated behind an env var to avoid running Docker in CI by default.
-	if env::var("RUN_DOCKER_INTEGRATION_TESTS").is_err() {
-		eprintln!("Skipping Docker integration test; set RUN_DOCKER_INTEGRATION_TESTS=1 to enable");
+	if !common::check_docker_enabled() {
 		return;
 	}
 
@@ -15,20 +14,10 @@ async fn integration_dev_db_merge() {
 		.await
 		.expect("start db");
 
-	// Wait a little for Postgres to accept connections
-	let mut attempts = 0;
-	let pool = loop {
-		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
-			Ok(p) => break p,
-			Err(_) => {
-				attempts += 1;
-				if attempts > 30 {
-					panic!("Postgres did not become ready in time");
-				}
-				sleep(Duration::from_secs(1)).await;
-			}
-		}
-	};
+	// Wait for Postgres to accept connections
+	let pool = common::wait_for_postgres("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall", 30)
+		.await
+		.expect("connect to postgres");
 
 	// Use AgeClient to perform a merge
 	let client = vanopticon_heimdall::age_client::AgeClient::new(pool.clone(), "heimdall_graph");
