@@ -3,6 +3,7 @@ pub mod config;
 pub mod devops;
 pub mod health;
 pub mod ingest;
+pub mod observability;
 pub mod persist;
 pub mod state;
 pub mod sync;
@@ -40,6 +41,15 @@ use tower_http::trace::TraceLayer;
 /// This function intentionally logs errors rather than returning them so
 /// the simple `main` runner can call it without changing its signature.
 pub async fn run() {
+	// Initialize observability: structured logging, metrics, and tracing
+	let obs_state = match crate::observability::init_observability().await {
+		Ok(s) => s,
+		Err(e) => {
+			eprintln!("warning: failed to initialize observability: {}", e);
+			crate::observability::ObservabilityState::default()
+		}
+	};
+
 	// Load settings (fall back to defaults on error)
 	let settings = match crate::config::load() {
 		Ok(s) => s,
@@ -160,6 +170,7 @@ pub async fn run() {
 
 	let sender = crate::persist::start_batcher(
 		repo.clone(),
+		obs_state.metrics.clone(),
 		persist_capacity,
 		persist_batch_size,
 		persist_flush_ms,
@@ -168,6 +179,7 @@ pub async fn run() {
 	let app_state = crate::state::AppState {
 		repo: repo.clone(),
 		persist_sender: sender,
+		metrics: obs_state.metrics.clone(),
 	};
 	let app = app.with_state(app_state);
 

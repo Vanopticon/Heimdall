@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::age_client::AgeRepo;
+use crate::observability::MetricsRegistry;
 
 /// Application state passed to handlers via Axum's `State` extractor.
 ///

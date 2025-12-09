@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::time::Duration;
 
 use crate::age_client::AgeRepo;
+use crate::observability::MetricsRegistry;
 use serde_json::Value;
 
 /// A single persistence job: represents a normalized and sanitized record
@@ -25,68 +25,17 @@ pub struct PersistJob {
 /// Sender side exported type
 pub type PersistSender = Sender<PersistJob>;
 
-// Simple in-process metrics exposed via the /metrics endpoint. We avoid
-// adding a heavy dependency (Prometheus client) for now and expose a
-// minimal Prometheus-compatible text format from the application.
-static PERSIST_JOBS_SUBMITTED: AtomicU64 = AtomicU64::new(0);
-static PERSIST_BATCH_FLUSHES: AtomicU64 = AtomicU64::new(0);
-static PERSIST_BATCH_FAILURES: AtomicU64 = AtomicU64::new(0);
-static PERSIST_PER_ITEM_FAILURES: AtomicU64 = AtomicU64::new(0);
-static PERSIST_BATCH_LATENCY_MS_SUM: AtomicU64 = AtomicU64::new(0);
-
 /// Submit a job to the persistence sender while recording a simple metric.
 /// This helper centralizes submission so metrics are accurate and callers
 /// don't need to remember to increment counters.
 pub fn submit_job(
 	sender: &PersistSender,
 	job: PersistJob,
+	metrics: &Arc<MetricsRegistry>,
 ) -> Result<(), tokio::sync::mpsc::error::TrySendError<PersistJob>> {
-	PERSIST_JOBS_SUBMITTED.fetch_add(1, Ordering::Relaxed);
+	metrics.persist_jobs_submitted.inc();
+	metrics.persist_queue_length.inc();
 	sender.try_send(job)
-}
-
-/// Return a small Prometheus-compatible metrics payload describing persistence
-/// queue and batcher activity.
-pub fn metrics_text() -> String {
-	let mut out = String::new();
-	out.push_str("# HELP heimdall_persist_jobs_submitted_total Total persist jobs submitted\n");
-	out.push_str("# TYPE heimdall_persist_jobs_submitted_total counter\n");
-	out.push_str(&format!(
-		"heimdall_persist_jobs_submitted_total {}\n",
-		PERSIST_JOBS_SUBMITTED.load(Ordering::Relaxed)
-	));
-
-	out.push_str("# HELP heimdall_persist_batch_flushes_total Number of batch flushes\n");
-	out.push_str("# TYPE heimdall_persist_batch_flushes_total counter\n");
-	out.push_str(&format!(
-		"heimdall_persist_batch_flushes_total {}\n",
-		PERSIST_BATCH_FLUSHES.load(Ordering::Relaxed)
-	));
-
-	out.push_str("# HELP heimdall_persist_batch_failures_total Number of batch failures\n");
-	out.push_str("# TYPE heimdall_persist_batch_failures_total counter\n");
-	out.push_str(&format!(
-		"heimdall_persist_batch_failures_total {}\n",
-		PERSIST_BATCH_FAILURES.load(Ordering::Relaxed)
-	));
-
-	out.push_str("# HELP heimdall_persist_per_item_failures_total Per-item persistence failures\n");
-	out.push_str("# TYPE heimdall_persist_per_item_failures_total counter\n");
-	out.push_str(&format!(
-		"heimdall_persist_per_item_failures_total {}\n",
-		PERSIST_PER_ITEM_FAILURES.load(Ordering::Relaxed)
-	));
-
-	out.push_str(
-		"# HELP heimdall_persist_batch_flush_latency_ms_sum Cumulative batch flush latency in ms\n",
-	);
-	out.push_str("# TYPE heimdall_persist_batch_flush_latency_ms_sum counter\n");
-	out.push_str(&format!(
-		"heimdall_persist_batch_flush_latency_ms_sum {}\n",
-		PERSIST_BATCH_LATENCY_MS_SUM.load(Ordering::Relaxed)
-	));
-
-	out
 }
 
 /// Start a background batcher task that collects persistence jobs and
@@ -95,8 +44,10 @@ pub fn metrics_text() -> String {
 /// can be used to submit `PersistJob`s.
 ///
 /// This function spawns a detached task and returns immediately.
+#[tracing::instrument(skip(repo, metrics))]
 pub fn start_batcher(
 	repo: Arc<dyn AgeRepo>,
+	metrics: Arc<MetricsRegistry>,
 	channel_capacity: usize,
 	batch_size: usize,
 	flush_interval_ms: u64,
@@ -114,15 +65,16 @@ pub fn start_batcher(
 				maybe_job = rx.recv() => {
 					match maybe_job {
 						Some(job) => {
+							metrics.persist_queue_length.dec();
 							buffer.push(job);
 							if buffer.len() >= batch_size {
-								flush_buffer(&repo, &mut buffer).await;
+								flush_buffer(&repo, &metrics, &mut buffer).await;
 							}
 						}
 						None => {
 							// Channel closed; flush remaining and exit
 							if !buffer.is_empty() {
-								flush_buffer(&repo, &mut buffer).await;
+								flush_buffer(&repo, &metrics, &mut buffer).await;
 							}
 							break;
 						}
@@ -130,7 +82,7 @@ pub fn start_batcher(
 				}
 				_ = tokio::time::sleep(flush_interval) => {
 					if !buffer.is_empty() {
-						flush_buffer(&repo, &mut buffer).await;
+						flush_buffer(&repo, &metrics, &mut buffer).await;
 					}
 				}
 			}
@@ -140,7 +92,12 @@ pub fn start_batcher(
 	tx
 }
 
-async fn flush_buffer(repo: &Arc<dyn AgeRepo>, buffer: &mut Vec<PersistJob>) {
+#[tracing::instrument(skip(repo, metrics, buffer), fields(batch_size = buffer.len()))]
+async fn flush_buffer(
+	repo: &Arc<dyn AgeRepo>,
+	metrics: &Arc<MetricsRegistry>,
+	buffer: &mut Vec<PersistJob>,
+) {
 	// Drain FIFO order
 	let jobs: Vec<PersistJob> = buffer.drain(..).collect();
 	if jobs.is_empty() {
@@ -154,20 +111,21 @@ async fn flush_buffer(repo: &Arc<dyn AgeRepo>, buffer: &mut Vec<PersistJob>) {
 		.map(|j| (j.label.clone(), j.key.clone(), j.props.clone()))
 		.collect();
 
-	// Measure batch latency and record simple metrics
+	// Measure batch latency and record metrics
 	let start = Instant::now();
 	let res = repo.merge_batch(&tuples).await;
-	let elapsed_ms = start.elapsed().as_millis() as u64;
-	PERSIST_BATCH_FLUSHES.fetch_add(1, Ordering::Relaxed);
-	PERSIST_BATCH_LATENCY_MS_SUM.fetch_add(elapsed_ms, Ordering::Relaxed);
+	let elapsed_ms = start.elapsed().as_millis() as f64;
+	metrics.persist_batch_flushes.inc();
+	// Histogram expects milliseconds, as per metric name
+	metrics.persist_batch_latency_ms.observe(elapsed_ms);
 
 	if let Err(e) = res {
-		PERSIST_BATCH_FAILURES.fetch_add(1, Ordering::Relaxed);
+		metrics.persist_batch_failures.inc();
 		eprintln!("persistence batch failed: {}", e);
 		// If merge_batch returns an error, try per-item merges as a last resort
 		for j in jobs {
 			if let Err(e2) = repo.merge_entity(&j.label, &j.key, &j.props).await {
-				PERSIST_PER_ITEM_FAILURES.fetch_add(1, Ordering::Relaxed);
+				metrics.persist_per_item_failures.inc();
 				eprintln!("per-item persist failed for {}: {}", j.key, e2);
 			}
 		}

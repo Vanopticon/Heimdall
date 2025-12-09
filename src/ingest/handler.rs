@@ -12,10 +12,14 @@ use tokio::sync::mpsc::error::TrySendError;
 /// A streaming HTTP handler that parses NDJSON from the request body without
 /// buffering the entire payload in memory. It reads body chunks, splits them
 /// on newlines, and normalizes each line as it arrives.
+#[tracing::instrument(skip(state, req), fields(endpoint = "ndjson"))]
 pub async fn ndjson_upload(
 	State(state): State<crate::state::AppState>,
 	req: Request<Body>,
 ) -> impl IntoResponse {
+	let start_time = Instant::now();
+	state.metrics.ingest_requests_total.inc();
+
 	// Stream the request body and process NDJSON line-by-line to avoid
 	// buffering very large payloads in memory. We collect complete lines
 	// by scanning for '\n' in the incoming byte stream and hand each line
@@ -27,11 +31,13 @@ pub async fn ndjson_upload(
 	let mut buf: Vec<u8> = Vec::new();
 	let mut records: Vec<crate::ingest::NormalizedRecord> = Vec::new();
 	let punct_re = Regex::new(r"^[\W_]+|[\W_]+$").unwrap();
+	let mut total_bytes: usize = 0;
 
 	while let Some(chunk_res) = stream.next().await {
 		match chunk_res {
 			Ok(bytes_chunk) => {
 				let chunk = bytes_chunk.as_ref();
+				total_bytes += chunk.len();
 				buf.extend_from_slice(chunk);
 
 				// Extract complete lines (terminated by '\n') and normalize each.
@@ -54,6 +60,7 @@ pub async fn ndjson_upload(
 
 				// Safety: guard against pathological single-line sizes
 				if buf.len() > 10 * 1024 * 1024 {
+					state.metrics.ingest_errors_total.inc();
 					return (
 						StatusCode::BAD_REQUEST,
 						"line too long or streaming malformed",
@@ -62,6 +69,7 @@ pub async fn ndjson_upload(
 				}
 			}
 			Err(e) => {
+				state.metrics.ingest_errors_total.inc();
 				return (
 					StatusCode::BAD_REQUEST,
 					format!("failed to read request body: {}", e),
@@ -78,6 +86,14 @@ pub async fn ndjson_upload(
 			records.push(rec);
 		}
 	}
+
+	// Update metrics
+	state.metrics.ingest_bytes_total.inc_by(total_bytes as f64);
+	state
+		.metrics
+		.ingest_records_total
+		.inc_by(records.len() as u64);
+
 	// Enqueue normalized records to the background batcher. If the
 	// persistence channel is full or closed we'll fall back to performing
 	// the persistence synchronously to avoid data loss.
@@ -96,7 +112,7 @@ pub async fn ndjson_upload(
 			props: props.clone(),
 		};
 
-		match crate::persist::submit_job(&sender, job.clone()) {
+		match crate::persist::submit_job(&sender, job.clone(), &state.metrics) {
 			Ok(()) => {}
 			Err(TrySendError::Full(returned)) | Err(TrySendError::Closed(returned)) => {
 				// Channel unavailable; persist synchronously using the
@@ -106,6 +122,7 @@ pub async fn ndjson_upload(
 					.merge_entity(&returned.label, &returned.key, &returned.props)
 					.await
 				{
+					state.metrics.ingest_errors_total.inc();
 					return (
 						StatusCode::INTERNAL_SERVER_ERROR,
 						format!("failed to persist record: {}", e),
@@ -116,22 +133,29 @@ pub async fn ndjson_upload(
 		}
 	}
 
+	// Record ingest duration
+	let duration = start_time.elapsed().as_secs_f64();
+	state.metrics.ingest_duration_seconds.observe(duration);
+
 	match serde_json::to_string(&records) {
 		Ok(body) => (StatusCode::OK, body).into_response(),
-		Err(e) => (
-			StatusCode::INTERNAL_SERVER_ERROR,
-			format!("failed to serialize response: {}", e),
-		)
-			.into_response(),
+		Err(e) => {
+			state.metrics.ingest_errors_total.inc();
+			(
+				StatusCode::INTERNAL_SERVER_ERROR,
+				format!("failed to serialize response: {}", e),
+			)
+				.into_response()
+		}
 	}
 }
 
 #[cfg(feature = "ingest-tests")]
 mod tests {
-	use super::*;
-	use axum::body::Body;
-	use axum::http::Request;
-	use futures_util::stream;
+	use axum::extract::State;
+	use axum::response::IntoResponse;
+	use std::sync::Arc;
+	use tokio::sync::mpsc;
 
 	#[tokio::test]
 	async fn handler_accepts_ndjson_stream() {
@@ -139,36 +163,13 @@ mod tests {
 {"field_type":"email","value":"USER@EXAMPLE.COM"}
 "#;
 
-		let req = Request::builder()
+		let req = axum::http::Request::builder()
 			.method("POST")
 			.uri("/")
-			.body(Body::from(payload.to_string()))
+			.body(axum::body::Body::from(payload.to_string()))
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
-		assert_eq!(resp.status(), StatusCode::OK);
-	}
-
-	#[tokio::test]
-	async fn bulk_dump_streaming_writes_file() {
-		// Simulate a chunked upload by building a TryStream of Bytes
-		let s = stream::iter(vec![
-			Ok::<_, std::io::Error>(b"first line\n".to_vec()),
-			Ok::<_, std::io::Error>(b"second line\n".to_vec()),
-		]);
-
-		let body = Body::from_stream(s);
-
-		let req = Request::builder()
-			.method("POST")
-			.uri("/")
-			.body(body)
-			.unwrap();
-
-		// Build a minimal AppState for the handler's State extractor
-		use std::sync::Arc;
-		use tokio::sync::mpsc;
-
+		// Build test state
 		struct DummyRepo;
 		#[async_trait::async_trait]
 		impl crate::age_client::AgeRepo for DummyRepo {
@@ -195,21 +196,79 @@ mod tests {
 
 		let (tx, _rx) = mpsc::channel(16);
 		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let metrics = Arc::new(crate::observability::MetricsRegistry::new());
 		let app_state = crate::state::AppState {
 			repo,
 			persist_sender: tx,
+			metrics,
 		};
 
-		let resp = bulk_dump_upload(axum::extract::State(app_state), req)
+		let resp = super::ndjson_upload(State(app_state), req)
 			.await
 			.into_response();
-		assert_eq!(resp.status(), StatusCode::OK);
+		assert_eq!(resp.status(), axum::http::StatusCode::OK);
+	}
+
+	#[tokio::test]
+	async fn bulk_dump_streaming_writes_file() {
+		// Simulate a chunked upload by building a TryStream of Bytes
+		let s = futures_util::stream::iter(vec![
+			Ok::<_, std::io::Error>(b"first line\n".to_vec()),
+			Ok::<_, std::io::Error>(b"second line\n".to_vec()),
+		]);
+
+		let body = axum::body::Body::from_stream(s);
+
+		let req = axum::http::Request::builder()
+			.method("POST")
+			.uri("/")
+			.body(body)
+			.unwrap();
+
+		// Build a minimal AppState for the handler's State extractor
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let metrics = Arc::new(crate::observability::MetricsRegistry::new());
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+			metrics,
+		};
+
+		let resp = super::bulk_dump_upload(State(app_state), req)
+			.await
+			.into_response();
+		assert_eq!(resp.status(), axum::http::StatusCode::OK);
 	}
 
 	#[tokio::test]
 	async fn ndjson_streaming_chunked_lines() {
 		// Simulate a NDJSON upload where a single JSON object is split across chunks
-		let s = stream::iter(vec![
+		let s = futures_util::stream::iter(vec![
 			Ok::<_, std::io::Error>(b"{".to_vec()),
 			Ok::<_, std::io::Error>(b"\"field_type\":\"domain\",\"value\":\"Exa".to_vec()),
 			Ok::<_, std::io::Error>(b"mple.COM\"}\n{".to_vec()),
@@ -218,16 +277,52 @@ mod tests {
 			),
 		]);
 
-		let body = Body::from_stream(s);
+		let body = axum::body::Body::from_stream(s);
 
-		let req = Request::builder()
+		let req = axum::http::Request::builder()
 			.method("POST")
 			.uri("/")
 			.body(body)
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
-		assert_eq!(resp.status(), StatusCode::OK);
+		// Build test state
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let metrics = Arc::new(crate::observability::MetricsRegistry::new());
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+			metrics,
+		};
+
+		let resp = super::ndjson_upload(State(app_state), req)
+			.await
+			.into_response();
+		assert_eq!(resp.status(), axum::http::StatusCode::OK);
 
 		// Optionally parse and assert the returned JSON contains normalized entries
 		// but for now ensure status OK and that handler didn't error on chunk boundaries.
@@ -237,10 +332,14 @@ mod tests {
 /// Bulk dump upload endpoint: accepts any raw data stream, writes it to a
 /// temporary file, and attempts to determine the dump type (ndjson/csv/json/text/binary/compressed).
 /// Returns a small JSON description including detected type, size, preview and the temp filename.
+#[tracing::instrument(skip(state, req), fields(endpoint = "bulk"))]
 pub async fn bulk_dump_upload(
 	State(state): State<crate::state::AppState>,
 	req: Request<Body>,
 ) -> impl IntoResponse {
+	let start_time = Instant::now();
+	state.metrics.ingest_requests_total.inc();
+
 	// Peek up to this many bytes for detection
 	const MAX_PEEK: usize = 64 * 1024;
 
@@ -262,6 +361,7 @@ pub async fn bulk_dump_upload(
 	let mut file = match TokioFile::create(&tmp_path).await {
 		Ok(f) => f,
 		Err(e) => {
+			state.metrics.ingest_errors_total.inc();
 			return (
 				StatusCode::INTERNAL_SERVER_ERROR,
 				format!("failed to create temp file: {}", e),
@@ -289,6 +389,7 @@ pub async fn bulk_dump_upload(
 				}
 
 				if let Err(e) = file.write_all(chunk).await {
+					state.metrics.ingest_errors_total.inc();
 					return (
 						StatusCode::INTERNAL_SERVER_ERROR,
 						format!("failed writing to temp file: {}", e),
@@ -297,6 +398,7 @@ pub async fn bulk_dump_upload(
 				}
 			}
 			Err(e) => {
+				state.metrics.ingest_errors_total.inc();
 				return (
 					StatusCode::BAD_REQUEST,
 					format!("failed to read request body chunk: {}", e),
@@ -308,12 +410,17 @@ pub async fn bulk_dump_upload(
 
 	// flush file
 	if let Err(e) = file.flush().await {
+		state.metrics.ingest_errors_total.inc();
 		return (
 			StatusCode::INTERNAL_SERVER_ERROR,
 			format!("failed to flush temp file: {}", e),
 		)
 			.into_response();
 	}
+
+	// Update metrics
+	state.metrics.ingest_bytes_total.inc_by(total as f64);
+	state.metrics.ingest_records_total.inc();
 
 	// Detect type from peek (use a slice of the bytes up to MAX_PEEK)
 	let peek = &peek_buf[..];
@@ -382,9 +489,10 @@ pub async fn bulk_dump_upload(
 										};
 
 										// Best-effort submission: try a few times before dropping the job.
+										// Note: metrics not available in this background task context
 										let mut attempts = 0;
 										loop {
-											match crate::persist::submit_job(&sender, job.clone()) {
+											match sender.try_send(job.clone()) {
 						 Ok(()) => break,
 						 Err(e) => match e {
 							tokio::sync::mpsc::error::TrySendError::Full(_ret) => {
@@ -418,13 +526,20 @@ pub async fn bulk_dump_upload(
 		});
 	}
 
+	// Record ingest duration
+	let duration = start_time.elapsed().as_secs_f64();
+	state.metrics.ingest_duration_seconds.observe(duration);
+
 	match serde_json::to_string(&resp) {
 		Ok(body) => (StatusCode::OK, body).into_response(),
-		Err(e) => (
-			StatusCode::INTERNAL_SERVER_ERROR,
-			format!("failed to serialize response: {}", e),
-		)
-			.into_response(),
+		Err(e) => {
+			state.metrics.ingest_errors_total.inc();
+			(
+				StatusCode::INTERNAL_SERVER_ERROR,
+				format!("failed to serialize response: {}", e),
+			)
+				.into_response()
+		}
 	}
 }
 
