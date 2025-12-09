@@ -92,12 +92,12 @@ Create a `.env` file or export environment variables:
 export HMD_TLS_KEY=/path/to/tls/private.key
 export HMD_TLS_CERT=/path/to/tls/certificate.crt
 
-# Required: OAuth/OIDC Configuration
+# Required: OAuth/OIDC Configuration (replace all with actual values from your provider)
 export HMD_OAUTH_DISCOVERY_URL=https://auth.example.com/.well-known/openid-configuration
-export HMD_OAUTH_H2M_ID=heimdall-h2m-client-id
-export HMD_OAUTH_H2M_SECRET=heimdall-h2m-client-secret
-export HMD_OAUTH_M2M_ID=heimdall-m2m-client-id
-export HMD_OAUTH_M2M_SECRET=heimdall-m2m-client-secret
+export HMD_OAUTH_H2M_ID=REPLACE_WITH_ACTUAL_H2M_CLIENT_ID
+export HMD_OAUTH_H2M_SECRET=REPLACE_WITH_ACTUAL_H2M_CLIENT_SECRET
+export HMD_OAUTH_M2M_ID=REPLACE_WITH_ACTUAL_M2M_CLIENT_ID
+export HMD_OAUTH_M2M_SECRET=REPLACE_WITH_ACTUAL_M2M_CLIENT_SECRET
 
 # Optional: Server Configuration
 export HMD_HOST=0.0.0.0
@@ -114,7 +114,7 @@ export HMD_COOKIE_SECRET=GENERATE_AND_REPLACE_ME
 export HMD_OIDC_SCOPE="openid profile email"
 ```
 
-**Security Note**: Never commit secrets to version control. Use a secrets manager (HashiCorp Vault, AWS Secrets Manager, etc.) or environment-specific configuration files with restricted permissions.
+**Security Note**: Replace **all** placeholder values (REPLACE_WITH_*, GENERATE_AND_REPLACE_ME) with actual credentials from your OAuth provider, database, and generated secrets. Never commit secrets to version control. Use a secrets manager (HashiCorp Vault, AWS Secrets Manager, etc.) or environment-specific configuration files with restricted permissions (chmod 600).
 
 #### Step 5: Run Heimdall
 
@@ -504,9 +504,11 @@ Create environment file:
 HMD_TLS_KEY=/etc/heimdall/tls/private.key
 HMD_TLS_CERT=/etc/heimdall/tls/certificate.crt
 HMD_OAUTH_DISCOVERY_URL=https://auth.example.com/.well-known/openid-configuration
-HMD_OAUTH_H2M_ID=heimdall-h2m-client-id
-HMD_OAUTH_M2M_ID=heimdall-m2m-client-id
-HMD_DATABASE_URL=postgres://heimdall:PASSWORD@localhost:5432/heimdall
+HMD_OAUTH_H2M_ID=REPLACE_WITH_ACTUAL_H2M_CLIENT_ID
+HMD_OAUTH_H2M_SECRET=REPLACE_WITH_ACTUAL_H2M_CLIENT_SECRET
+HMD_OAUTH_M2M_ID=REPLACE_WITH_ACTUAL_M2M_CLIENT_ID
+HMD_OAUTH_M2M_SECRET=REPLACE_WITH_ACTUAL_M2M_CLIENT_SECRET
+HMD_DATABASE_URL=postgres://heimdall:REPLACE_WITH_DB_PASSWORD@localhost:5432/heimdall
 HMD_AGE_GRAPH=heimdall_graph
 HMD_HOST=0.0.0.0
 HMD_PORT=443
@@ -515,7 +517,7 @@ HMD_PORT=443
 # HMD_COOKIE_SECRET=GENERATE_AND_REPLACE_ME
 ```
 
-**Security Note**: Store sensitive values (OAuth secrets, database passwords, cookie secrets) securely. Replace placeholder values (PASSWORD, GENERATE_AND_REPLACE_ME, etc.) with actual secrets. Generate cookie secret once: `openssl rand -base64 32` and store it securely. Never use placeholder values in production.
+**Security Note**: Store sensitive values (OAuth secrets, database passwords, cookie secrets) securely. Replace **all** placeholder values (REPLACE_WITH_*, GENERATE_AND_REPLACE_ME, etc.) with actual secrets before deployment. Generate cookie secret once: `openssl rand -base64 32` and store it securely. Never use placeholder or example values in production.
 
 Set permissions:
 
