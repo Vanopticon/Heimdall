@@ -7,5 +7,5 @@
 		"Add tests for high-risk modules",
 		"Ensure integration/e2e tests run against ephemeral Postgres+AGE"
 	],
-	"passes": false
+	"passes": true
 }

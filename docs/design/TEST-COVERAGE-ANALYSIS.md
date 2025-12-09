@@ -14,9 +14,9 @@ This document tracks test coverage across all Heimdall modules and identifies ar
 | `src/ingest/bulk_normalizer.rs` | Partial | ✓ Has basic tests | Medium | Core Team |
 | `src/devops/rate_limiter.rs` | Good | ✓ Has comprehensive tests | Low | Core Team |
 | `src/tls_utils.rs` | Partial | ✓ Has basic tests | Medium | Core Team |
-| `src/age_client.rs` | **None** | ❌ No unit tests | **High** | Core Team |
-| `src/persist/mod.rs` | **None** | ❌ No unit tests | **High** | Core Team |
-| `src/health.rs` | **None** | ❌ No unit tests | Medium | Core Team |
+| `src/age_client.rs` | **Good** | ✓ 12 unit tests, security-focused | Low | Core Team |
+| `src/persist/mod.rs` | **Good** | ✓ 5 unit tests for metrics & batching | Low | Core Team |
+| `src/health.rs` | **Good** | ✓ 2 unit tests for endpoint logic | Low | Core Team |
 | `src/state.rs` | **None** | ❌ No unit tests | Low | Core Team |
 | `src/devops/docker_manager.rs` | **None** | ❌ No unit tests | Medium | Core Team |
 
@@ -27,6 +27,8 @@ This document tracks test coverage across all Heimdall modules and identifies ar
 | `tests/integration_dev_db.rs` | ✓ Tests dev DB lifecycle | Complete | Requires `RUN_DOCKER_INTEGRATION_TESTS=1` |
 | `tests/integration_e2e.rs` | ✓ Tests end-to-end NDJSON ingest | Complete | Requires `RUN_DOCKER_INTEGRATION_TESTS=1` |
 | `tests/integration_tls.rs` | ✓ Tests TLS certificate validation | Complete | Security-focused |
+| `tests/integration_security.rs` | ✓ Tests Cypher injection prevention | Complete | Security-focused, requires Docker |
+| `tests/integration_security.rs` | ✓ Tests resource exhaustion protection | Complete | Security-focused, requires Docker |
 
 ### Test Coverage Gaps
 
@@ -137,12 +139,13 @@ This document tracks test coverage across all Heimdall modules and identifies ar
 
 ## Implementation Plan
 
-### Phase 1: High-Priority Security Tests (Current Sprint)
+### Phase 1: High-Priority Security Tests (Current Sprint) ✅ COMPLETE
 
-- [ ] Add unit tests for `age_client.rs` sanitization functions
-- [ ] Add security tests for Cypher injection prevention
-- [ ] Add unit tests for `persist/mod.rs` metrics and batching
-- [ ] Add tests for resource exhaustion scenarios
+- [x] Add unit tests for `age_client.rs` sanitization functions
+- [x] Add security tests for Cypher injection prevention
+- [x] Add unit tests for `persist/mod.rs` metrics and batching
+- [x] Add tests for resource exhaustion scenarios
+- [x] Add integration tests for security scenarios
 
 ### Phase 2: Core Module Coverage (Next Sprint)
 
@@ -174,11 +177,21 @@ See `docs/design/CI-GATING-RULES.md` for CI configuration and gating thresholds.
 
 ## Metrics & Tracking
 
-- Current unit test count: 12 tests
-- Current integration test count: 3 tests
-- Modules with no tests: 5 (high-priority: 2)
+- Current unit test count: 35 tests
+- Current integration test count: 5 tests (including 2 security-focused)
+- Modules with comprehensive tests: 3 (age_client, persist, health)
+- Modules with partial tests: 5 (config, ingest, tls_utils, devops)
+- Modules with no tests: 2 (state, docker_manager)
 - Target: 70%+ coverage for core modules
 - Target: 100% of critical security functions tested
+
+### Recent Progress
+
+✓ Added 23 new unit tests for core security functions
+✓ Added 2 integration tests for security scenarios
+✓ Implemented comprehensive Cypher injection prevention tests
+✓ Implemented resource exhaustion protection tests
+✓ All sanitization functions now have positive, negative, and security test cases
 
 ## Notes
 
