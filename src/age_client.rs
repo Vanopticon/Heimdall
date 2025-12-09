@@ -266,10 +266,23 @@ impl AgeClient {
 	///
 	/// This executes raw SQL statements (including Cypher via AGE functions)
 	/// to initialize the graph structure, indices, and labels.
+	///
+	/// **Important Limitations:**
+	/// - Executes the entire SQL content as a single statement batch
+	/// - Does not parse individual statements or handle complex transaction boundaries
+	/// - Suitable for initial schema setup and idempotent migration scripts
+	/// - For production use with multiple migrations, consider using a dedicated
+	///   migration tool like `sqlx-cli` or `refinery` that supports proper
+	///   versioning, rollback, and statement-by-statement execution
+	///
+	/// **Safety:**
+	/// - Only execute trusted SQL content (typically embedded via `include_str!`)
+	/// - Never pass user-provided content to this method
+	/// - Ensure migrations are idempotent (use CREATE IF NOT EXISTS, MERGE, etc.)
 	pub async fn apply_migration(&self, sql_content: &str) -> Result<()> {
-		// Execute the SQL content directly
-		// Note: This is a simple implementation; production code should handle
-		// transaction boundaries and statement parsing more carefully
+		// Execute the SQL content directly as a batch.
+		// This works for simple DO blocks and CREATE IF NOT EXISTS statements
+		// but does not handle complex multi-statement scripts with dependencies.
 		sqlx::query(sql_content).execute(&self.pool).await?;
 		Ok(())
 	}
