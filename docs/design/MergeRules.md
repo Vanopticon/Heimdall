@@ -82,6 +82,20 @@ let rule = MergeRule::new("Sighting", MergeStrategy::MergeSightings)
 let config = MergeConfig::new().add_rule(rule);
 ```
 
+**Field Naming Conventions**:
+
+The merge implementation uses substring matching to identify field types:
+
+- Fields containing `"count"` are treated as counters (summed)
+- Fields containing `"seen"` or `"timestamp"` are treated as timestamps
+- Fields containing `"first"` within timestamps use older value
+- Other timestamp fields use newer value
+
+**Important**: Use clear, unambiguous field names to avoid false positives:
+
+- ✅ Good: `count`, `sighting_count`, `last_seen`, `first_seen`
+- ❌ Avoid: `account`, `unseen_data` (would trigger false matches)
+
 **Behavior**:
 
 - **Count fields**: Values are summed (e.g., `count: 10 + 5 = 15`)
@@ -288,6 +302,29 @@ When adding a new entity type:
 2. Add a rule to the configuration
 3. Add tests covering conflict scenarios
 4. Document the merge behavior
+
+## Limitations and Future Improvements
+
+### Current Limitations
+
+1. **Field Type Detection**: Uses substring matching (`contains()`) which can cause false positives
+	 - **Mitigation**: Use clear, unambiguous field names
+	 - **Future**: Explicit field type configuration or type tags
+
+2. **Timestamp Format**: Assumes timestamps are u64 values
+	 - **Mitigation**: Use Unix milliseconds (u64) for all timestamps
+	 - **Future**: Support multiple timestamp formats (ISO8601, f64, etc.)
+
+3. **Version Vector Simplicity**: Uses single timestamp + origin ID
+	 - **Current**: Sufficient for deterministic ordering
+	 - **Future**: Full vector clocks for complex causality
+
+### Planned Enhancements
+
+- **Field Type Configuration**: Explicit field classification instead of substring matching
+- **Custom Merge Functions**: Per-field custom merge logic
+- **Conflict Callbacks**: Application-defined conflict resolution hooks
+- **Version Vector Evolution**: Full CRDT support if needed
 
 ## See Also
 
