@@ -7,6 +7,7 @@ use hyper::{Method, Request, StatusCode, Uri};
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use log::{debug, warn};
+use rand::Rng;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
@@ -240,9 +241,9 @@ impl ResilientClient {
 
 					// Exponential backoff with jitter
 					backoff = (backoff * 2).min(self.config.max_backoff());
-					let jitter = Duration::from_millis(
-						(rand::random::<u64>() % backoff.as_millis() as u64) / 4,
-					);
+					let max_jitter = backoff.as_millis() as u64 / 4;
+					let jitter_ms = rand::thread_rng().gen_range(0..=max_jitter);
+					let jitter = Duration::from_millis(jitter_ms);
 					backoff = backoff.saturating_add(jitter);
 
 					// Record failure if this was the last retry
