@@ -165,6 +165,9 @@ id_ed25519
 ### Misc
 *.orig
 
+### Test artifacts
+# Docker dev DB marker file
+.heimdall_db_started
 
 # Added by cargo
 

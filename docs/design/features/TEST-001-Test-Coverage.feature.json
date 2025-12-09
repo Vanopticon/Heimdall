@@ -1,0 +1,11 @@
+{
+	"category": "non-functional",
+	"description": "Track and implement unit, integration, e2e, and security-focused test coverage",
+	"steps": [
+		"Create prioritized list of modules requiring tests and assign owners",
+		"Define CI gating rules and coverage thresholds",
+		"Add tests for high-risk modules",
+		"Ensure integration/e2e tests run against ephemeral Postgres+AGE"
+	],
+	"passes": true
+}
