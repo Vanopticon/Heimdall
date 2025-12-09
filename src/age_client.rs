@@ -3,6 +3,40 @@ use async_trait::async_trait;
 use serde_json::Value;
 use sqlx::PgPool;
 
+/// Sanitize a property key by replacing non-alphanumeric characters with underscores.
+/// Returns "prop" if the result would be empty.
+fn sanitize_prop_key(k: &str) -> String {
+	let mut out = String::new();
+	for c in k.chars() {
+		if c.is_ascii_alphanumeric() || c == '_' {
+			out.push(c);
+		} else {
+			out.push('_');
+		}
+	}
+	if out.is_empty() {
+		"prop".to_string()
+	} else {
+		out
+	}
+}
+
+/// Sanitize a Cypher label by removing non-alphanumeric characters.
+/// Returns "FieldValue" if the result would be empty.
+fn sanitize_label(label: &str) -> String {
+	let mut out = String::new();
+	for c in label.chars() {
+		if c.is_ascii_alphanumeric() || c == '_' {
+			out.push(c);
+		}
+	}
+	if out.is_empty() {
+		"FieldValue".to_string()
+	} else {
+		out
+	}
+}
+
 /// Minimal AGE client wrapper for Postgres + Apache AGE.
 pub struct AgeClient {
 	pool: PgPool,
@@ -32,22 +66,6 @@ impl AgeClient {
 	pub async fn merge_entity(&self, label: &str, key: &str, props: &Value) -> Result<()> {
 		// Build a Cypher map from JSON properties, sanitizing keys and
 		// using JSON-serialized values to ensure proper escaping.
-		fn sanitize_prop_key(k: &str) -> String {
-			let mut out = String::new();
-			for c in k.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				} else {
-					out.push('_');
-				}
-			}
-			if out.is_empty() {
-				"prop".to_string()
-			} else {
-				out
-			}
-		}
-
 		let mut props_kv = Vec::new();
 		if let Value::Object(map) = props {
 			for (k, v) in map.iter() {
@@ -61,20 +79,6 @@ impl AgeClient {
 
 		// Sanitize label and serialize key using JSON encoding to ensure
 		// safe, quoted string injection into the Cypher statement.
-		fn sanitize_label(label: &str) -> String {
-			let mut out = String::new();
-			for c in label.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				}
-			}
-			if out.is_empty() {
-				"FieldValue".to_string()
-			} else {
-				out
-			}
-		}
-
 		let label_s = sanitize_label(label);
 		let key_json = serde_json::to_string(&key)?;
 
@@ -346,36 +350,6 @@ impl AgeRepo for AgeClient {
 		// sanitizing keys and labels. Values are JSON-serialized to ensure
 		// correct escaping. Property keys are transformed to a safe
 		// identifier (alphanumeric + underscore).
-		fn sanitize_label(label: &str) -> String {
-			let mut out = String::new();
-			for c in label.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				}
-			}
-			if out.is_empty() {
-				"FieldValue".to_string()
-			} else {
-				out
-			}
-		}
-
-		fn sanitize_prop_key(k: &str) -> String {
-			let mut out = String::new();
-			for c in k.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				} else {
-					out.push('_');
-				}
-			}
-			if out.is_empty() {
-				"prop".to_string()
-			} else {
-				out
-			}
-		}
-
 		let mut stmts: Vec<String> = Vec::with_capacity(items.len());
 		for (label, key, props) in items.iter() {
 			let label_s = sanitize_label(label);
@@ -462,15 +436,187 @@ impl AgeRepo for AgeClient {
 // `crate::state::AppState` (or pass an Arc<dyn AgeRepo>) when handlers
 // need persistence.
 
-#[cfg(feature = "integration-tests")]
+#[cfg(test)]
 mod tests {
-	use super::AgeClient;
+	use super::*;
 
-	// Note: This test is a compile-time smoke test only and does not connect to a DB.
-	#[tokio::test]
-	async fn client_smoke() {
-		// connecting to a real DB is outside unit test scope here; just ensure types work
-		let url = "postgres://heimdall:heimdall@localhost/heimdall";
-		let _ = AgeClient::connect(url, "heimdall_graph").await;
+	#[test]
+	fn sanitize_prop_key_alphanumeric() {
+		assert_eq!(sanitize_prop_key("valid_key123"), "valid_key123");
+	}
+
+	#[test]
+	fn sanitize_prop_key_special_chars() {
+		assert_eq!(sanitize_prop_key("key-with-dashes"), "key_with_dashes");
+		assert_eq!(sanitize_prop_key("key.with.dots"), "key_with_dots");
+		assert_eq!(sanitize_prop_key("key:with:colons"), "key_with_colons");
+	}
+
+	#[test]
+	fn sanitize_prop_key_empty() {
+		assert_eq!(sanitize_prop_key(""), "prop");
+		assert_eq!(sanitize_prop_key("!!!"), "___");
+	}
+
+	#[test]
+	fn sanitize_prop_key_unicode() {
+		// Unicode characters are replaced with underscores, except ASCII alphanumeric and underscore
+		let result = sanitize_prop_key("key_with_émojis_🔥");
+		assert!(result.starts_with("key_with_"));
+		// Verify no unicode characters remain
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_prop_key_sql_injection_attempt() {
+		// SQL injection attempts should be sanitized to underscores
+		let result = sanitize_prop_key("'; DROP TABLE users; --");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+		assert!(result.contains("DROP_TABLE_users"));
+	}
+
+	#[test]
+	fn sanitize_label_alphanumeric() {
+		assert_eq!(sanitize_label("ValidLabel"), "ValidLabel");
+		assert_eq!(sanitize_label("Label_123"), "Label_123");
+	}
+
+	#[test]
+	fn sanitize_label_special_chars() {
+		assert_eq!(sanitize_label("Label-With-Dashes"), "LabelWithDashes");
+		assert_eq!(sanitize_label("Label.With.Dots"), "LabelWithDots");
+	}
+
+	#[test]
+	fn sanitize_label_empty() {
+		assert_eq!(sanitize_label(""), "FieldValue");
+		assert_eq!(sanitize_label("!!!"), "FieldValue");
+	}
+
+	#[test]
+	fn sanitize_label_cypher_injection_attempt() {
+		assert_eq!(sanitize_label("Label'); MATCH (n)--"), "LabelMATCHn");
+	}
+
+	#[test]
+	fn sanitize_label_unicode() {
+		// Unicode characters are removed, keeping only ASCII alphanumeric and underscore
+		let result = sanitize_label("Label_with_émojis_🔥");
+		assert!(result.starts_with("Label_with_"));
+		// Verify only ASCII alphanumeric and underscore remain
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	// Security-focused tests
+	#[test]
+	fn sanitize_prop_key_prevents_cypher_command_injection() {
+		// Test various Cypher command injection attempts
+		let attempts = vec![
+			"MATCH (n) RETURN n",
+			"CREATE (n:Evil)",
+			"DELETE n",
+			"DETACH DELETE n",
+			"SET n.prop = 'value'",
+			"MERGE (n:Node)",
+		];
+
+		for attempt in attempts {
+			let result = sanitize_prop_key(attempt);
+			// Result should contain only alphanumeric and underscores
+			assert!(
+				result
+					.chars()
+					.all(|c| c.is_ascii_alphanumeric() || c == '_'),
+				"Failed to sanitize: {}",
+				attempt
+			);
+		}
+	}
+
+	#[test]
+	fn sanitize_label_prevents_cypher_command_injection() {
+		// Test various Cypher command injection attempts in labels
+		let attempts = vec![
+			"Label); CREATE (e:Evil)-[:OWNS]->(n",
+			"Label'); DROP DATABASE test; MATCH (n",
+			"Label RETURN n; MATCH (x",
+		];
+
+		for attempt in attempts {
+			let result = sanitize_label(attempt);
+			// Result should contain only alphanumeric and underscores, or default to FieldValue
+			assert!(
+				result
+					.chars()
+					.all(|c| c.is_ascii_alphanumeric() || c == '_'),
+				"Failed to sanitize label: {}",
+				attempt
+			);
+		}
+	}
+
+	#[test]
+	fn sanitize_prop_key_handles_null_bytes() {
+		// Null bytes should be sanitized to underscores
+		let result = sanitize_prop_key("key\0with\0nulls");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_label_handles_null_bytes() {
+		// Null bytes should be removed
+		let result = sanitize_label("Label\0With\0Nulls");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_prop_key_handles_very_long_input() {
+		// Test with a very long string to ensure no panics or buffer issues
+		let long_key = "a".repeat(10000);
+		let result = sanitize_prop_key(&long_key);
+		assert_eq!(result.len(), 10000);
+		assert!(result.chars().all(|c| c == 'a'));
+	}
+
+	#[test]
+	fn sanitize_label_handles_very_long_input() {
+		// Test with a very long string
+		let long_label = "L".repeat(10000);
+		let result = sanitize_label(&long_label);
+		assert_eq!(result.len(), 10000);
+		assert!(result.chars().all(|c| c == 'L'));
+	}
+
+	#[cfg(feature = "integration-tests")]
+	mod integration {
+		use super::*;
+
+		// Note: This test is a compile-time smoke test only and does not connect to a DB.
+		#[tokio::test]
+		async fn client_smoke() {
+			// connecting to a real DB is outside unit test scope here; just ensure types work
+			let url = "postgres://heimdall:heimdall@localhost/heimdall";
+			let _ = AgeClient::connect(url, "heimdall_graph").await;
+		}
 	}
 }

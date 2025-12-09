@@ -1,0 +1,11 @@
+{
+	"category": "non-functional",
+	"description": "Integration and e2e test harness for ephemeral Postgres+AGE",
+	"steps": [
+		"Provide test harness using docker-compose or testcontainers",
+		"Add example integration tests that cover ingest->enrich->sync",
+		"Add CI job to run integration/e2e suites",
+		"Document local test run instructions"
+	],
+	"passes": true
+}

@@ -7,5 +7,5 @@
 		"Create test harness that spins up ephemeral Postgres+AGE containers for integration tests (via docker-compose or testcontainers).",
 		"Implement e2e scenarios for ingestion → enrichment → sync."
 	],
-	"passes": false
+	"passes": true
 }

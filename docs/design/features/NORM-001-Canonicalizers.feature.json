@@ -1,0 +1,11 @@
+{
+	"category": "functional",
+	"description": "Canonicalizers for IP, domain, hash and stable canonical-key generation",
+	"steps": [
+		"Add src/lib/normalizers with canonicalizers for IP, domain, hash, email, timestamp",
+		"Implement canonical-key generation with versioning and salt",
+		"Add unit tests for edge cases",
+		"Document behavior and versioning"
+	],
+	"passes": true
+}
