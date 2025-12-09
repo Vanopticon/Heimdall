@@ -335,6 +335,94 @@ mod tests {
 		);
 	}
 
+	// Security-focused tests
+	#[test]
+	fn sanitize_prop_key_prevents_cypher_command_injection() {
+		// Test various Cypher command injection attempts
+		let attempts = vec![
+			"MATCH (n) RETURN n",
+			"CREATE (n:Evil)",
+			"DELETE n",
+			"DETACH DELETE n",
+			"SET n.prop = 'value'",
+			"MERGE (n:Node)",
+		];
+
+		for attempt in attempts {
+			let result = test_sanitize_prop_key(attempt);
+			// Result should contain only alphanumeric and underscores
+			assert!(
+				result
+					.chars()
+					.all(|c| c.is_ascii_alphanumeric() || c == '_'),
+				"Failed to sanitize: {}",
+				attempt
+			);
+		}
+	}
+
+	#[test]
+	fn sanitize_label_prevents_cypher_command_injection() {
+		// Test various Cypher command injection attempts in labels
+		let attempts = vec![
+			"Label); CREATE (e:Evil)-[:OWNS]->(n",
+			"Label'); DROP DATABASE test; MATCH (n",
+			"Label RETURN n; MATCH (x",
+		];
+
+		for attempt in attempts {
+			let result = test_sanitize_label(attempt);
+			// Result should contain only alphanumeric and underscores, or default to FieldValue
+			assert!(
+				result
+					.chars()
+					.all(|c| c.is_ascii_alphanumeric() || c == '_'),
+				"Failed to sanitize label: {}",
+				attempt
+			);
+		}
+	}
+
+	#[test]
+	fn sanitize_prop_key_handles_null_bytes() {
+		// Null bytes should be sanitized to underscores
+		let result = test_sanitize_prop_key("key\0with\0nulls");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_label_handles_null_bytes() {
+		// Null bytes should be removed
+		let result = test_sanitize_label("Label\0With\0Nulls");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_prop_key_handles_very_long_input() {
+		// Test with a very long string to ensure no panics or buffer issues
+		let long_key = "a".repeat(10000);
+		let result = test_sanitize_prop_key(&long_key);
+		assert_eq!(result.len(), 10000);
+		assert!(result.chars().all(|c| c == 'a'));
+	}
+
+	#[test]
+	fn sanitize_label_handles_very_long_input() {
+		// Test with a very long string
+		let long_label = "L".repeat(10000);
+		let result = test_sanitize_label(&long_label);
+		assert_eq!(result.len(), 10000);
+		assert!(result.chars().all(|c| c == 'L'));
+	}
+
 	#[cfg(feature = "integration-tests")]
 	mod integration {
 		use super::*;
