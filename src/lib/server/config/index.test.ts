@@ -167,9 +167,7 @@ describe('config module', () => {
 		});
 
 		it('should throw error when config file does not exist', () => {
-			expect(() => load({ configFile: '/nonexistent/config.json' })).toThrow(
-				'Failed to load config file',
-			);
+			expect(() => load({ configFile: '/nonexistent/config.json' })).toThrow('Failed to load config file');
 		});
 
 		it('should throw error when config file contains invalid JSON', () => {

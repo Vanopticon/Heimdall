@@ -108,9 +108,7 @@ export function load(options: LoadOptions = {}): Settings {
 
 	// Generate cookie secret if not provided
 	const cookieSecret =
-		process.env.HMD_COOKIE_SECRET ||
-		fileConfig.cookie_secret ||
-		crypto.randomBytes(32).toString('hex');
+		process.env.HMD_COOKIE_SECRET || fileConfig.cookie_secret || crypto.randomBytes(32).toString('hex');
 
 	// Parse and validate port number
 	let port = 443; // default
@@ -131,16 +129,13 @@ export function load(options: LoadOptions = {}): Settings {
 		host: process.env.HMD_HOST || fileConfig.host || os.hostname(),
 		port,
 		tls_key_path: process.env.HMD_TLS_KEY || fileConfig.tls_key_path || '/etc/tls/tls.key',
-		tls_cert_path:
-			process.env.HMD_TLS_CERT || fileConfig.tls_cert_path || '/etc/tls/tls.crt',
-		oauth_discovery_url:
-			process.env.HMD_OAUTH_DISCOVERY_URL || fileConfig.oauth_discovery_url || '',
+		tls_cert_path: process.env.HMD_TLS_CERT || fileConfig.tls_cert_path || '/etc/tls/tls.crt',
+		oauth_discovery_url: process.env.HMD_OAUTH_DISCOVERY_URL || fileConfig.oauth_discovery_url || '',
 		oauth_h2m_id: process.env.HMD_OAUTH_H2M_ID || fileConfig.oauth_h2m_id || '',
 		oauth_h2m_secret: process.env.HMD_OAUTH_H2M_SECRET || fileConfig.oauth_h2m_secret || '',
 		oauth_m2m_id: process.env.HMD_OAUTH_M2M_ID || fileConfig.oauth_m2m_id || '',
 		oauth_m2m_secret: process.env.HMD_OAUTH_M2M_SECRET || fileConfig.oauth_m2m_secret || '',
-		oidc_scope:
-			process.env.HMD_OIDC_SCOPE || fileConfig.oidc_scope || 'openid profile email',
+		oidc_scope: process.env.HMD_OIDC_SCOPE || fileConfig.oidc_scope || 'openid profile email',
 		database_url: process.env.HMD_DATABASE_URL || fileConfig.database_url,
 		cookie_secret: cookieSecret,
 		age_graph: process.env.HMD_AGE_GRAPH || fileConfig.age_graph || 'dumps_graph',
@@ -173,8 +168,6 @@ export function loadTLS(settings: Settings): { key: Buffer; cert: Buffer } {
 			cert: fs.readFileSync(settings.tls_cert_path),
 		};
 	} catch (error) {
-		throw new Error(
-			`Failed to read TLS files: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		throw new Error(`Failed to read TLS files: ${error instanceof Error ? error.message : String(error)}`);
 	}
 }

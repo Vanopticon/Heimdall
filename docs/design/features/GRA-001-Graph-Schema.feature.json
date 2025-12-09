@@ -1,0 +1,11 @@
+{
+	"category": "functional",
+	"description": "SQL graph schema and lightweight Postgres+AGE client wrapper for MERGE/upserts",
+	"passes": false,
+	"steps": [
+		"Add SQL schema under sql/v1 for core graph nodes",
+		"Implement src/lib/server/ageClient.ts for transactional upserts and batched writes",
+		"Add integration tests validating migrations and upserts",
+		"Document schema and example usage"
+	]
+}

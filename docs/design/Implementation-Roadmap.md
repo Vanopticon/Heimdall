@@ -8,7 +8,7 @@ This document tracks the implementation milestones for Heimdall.
 
 ### Task 0.1: Configuration Module (Environment-First)
 
-**Status**: In Progress
+**Status**: Complete
 
 **Description**: Implement a centralized configuration module that reads from `HMD_*` environment variables and optional configuration files.
 
@@ -27,6 +27,30 @@ This document tracks the implementation milestones for Heimdall.
 - Unit tests pass
 - Configuration module documented in README
 - CI workflow runs successfully
+
+### Task 0.3: Graph Schema & Postgres+AGE Client Wrapper
+
+**Status**: In Progress
+
+**Description**: Define the canonical graph schema and provide a lightweight Postgres+AGE client wrapper with support for transactional upserts, batch operations, and provenance tracking.
+
+**Deliverables**:
+
+- SQL schema under `sql/v1/` implementing core nodes (dumps, fields, field_value, sightings, entities, NPI categories)
+- Enhanced `src/lib/server/ageClient.ts` with transaction support and batch operations
+- Integration tests verifying schema migrations and upsert workflows
+- Documentation for schema design and usage examples
+
+**Feature Card**: [GRA-001-Graph-Schema](features/GRA-001-Graph-Schema.md)
+
+**Acceptance Criteria**:
+
+- SQL migrations apply on local dev Postgres+AGE
+- `src/lib/server/ageClient.ts` exposes clear API for MERGE-style upserts
+- Transaction support allows atomic operations
+- Batch operations reduce round-trips for bulk writes
+- Integration tests confirm canonical nodes are created with correct provenance
+- Tests validate transaction rollback on errors
 
 ### Future Tasks
 

@@ -443,6 +443,130 @@ export async function linkFields(parentField: string, childField: string) {
 	return await c.connection.query(sql);
 }
 
+// Transaction support for atomic operations
+export async function withTransaction<T>(fn: (connection: any) => Promise<T>): Promise<T> {
+	const c = getAgeClient();
+	const conn = await c.connectionManager.getConnection();
+
+	try {
+		await conn.query('BEGIN');
+		const result = await fn(conn);
+		await conn.query('COMMIT');
+		return result;
+	} catch (err) {
+		await conn.query('ROLLBACK');
+		throw err;
+	} finally {
+		conn.release?.();
+	}
+}
+
+// Batch create vertices - efficiently creates multiple nodes in a single transaction
+export async function batchCreateVertices(label: string, nodesList: Array<Record<string, unknown>>) {
+	const c = getAgeClient();
+
+	return await withTransaction(async (conn) => {
+		const results = [];
+
+		for (const props of nodesList) {
+			const map = propsToCypherMap(props);
+			const cypher = `CREATE (n:${label} ${map}) RETURN n`;
+			const sql = `SELECT * FROM cypher('${c.graph}', $$ ${cypher} $$) as (n agtype);`;
+			const result = await conn.query(sql);
+			results.push(result);
+		}
+
+		return results;
+	});
+}
+
+// Batch upsert (MERGE) vertices - efficiently merges multiple nodes
+export async function batchUpsertVertices(
+	label: string,
+	nodesList: Array<{ match: Record<string, unknown>; set?: Record<string, unknown> }>,
+) {
+	const c = getAgeClient();
+
+	return await withTransaction(async (conn) => {
+		const results = [];
+
+		for (const { match, set } of nodesList) {
+			const matchMap = propsToCypherMap(match);
+			const cypher =
+				set && Object.keys(set).length > 0 ?
+					`MERGE (n:${label} ${matchMap}) SET n += ${propsToCypherMap(set)} RETURN n`
+				:	`MERGE (n:${label} ${matchMap}) RETURN n`;
+
+			const sql = `SELECT * FROM cypher('${c.graph}', $$ ${cypher} $$) as (n agtype);`;
+			const result = await conn.query(sql);
+			results.push(result);
+		}
+
+		return results;
+	});
+}
+
+// Batch create edges with properties
+export async function batchCreateEdges(
+	edgeType: string,
+	edgesList: Array<{
+		fromLabel: string;
+		fromMatch: Record<string, unknown>;
+		toLabel: string;
+		toMatch: Record<string, unknown>;
+		properties?: Record<string, unknown>;
+	}>,
+) {
+	const c = getAgeClient();
+
+	return await withTransaction(async (conn) => {
+		const results = [];
+
+		for (const { fromLabel, fromMatch, toLabel, toMatch, properties } of edgesList) {
+			const fromMatchMap = propsToCypherMap(fromMatch);
+			const toMatchMap = propsToCypherMap(toMatch);
+			const propsMap = properties && Object.keys(properties).length > 0 ? propsToCypherMap(properties) : '';
+
+			const cypher = `
+				MATCH (a:${fromLabel} ${fromMatchMap})
+				MATCH (b:${toLabel} ${toMatchMap})
+				MERGE (a)-[r:${edgeType} ${propsMap}]->(b)
+				RETURN a, r, b
+			`;
+
+			const sql = `SELECT * FROM cypher('${c.graph}', $$ ${cypher} $$) as (a agtype, r agtype, b agtype);`;
+			const result = await conn.query(sql);
+			results.push(result);
+		}
+
+		return results;
+	});
+}
+
+// Execute raw Cypher query (for advanced use cases)
+export async function executeCypher(cypherQuery: string) {
+	const c = getAgeClient();
+	const sql = `SELECT * FROM cypher('${c.graph}', $$ ${cypherQuery} $$) as (result agtype);`;
+	return await c.connection.query(sql);
+}
+
+// Execute multiple Cypher queries in a single transaction
+export async function executeCypherBatch(cypherQueries: string[]) {
+	const c = getAgeClient();
+
+	return await withTransaction(async (conn) => {
+		const results = [];
+
+		for (const cypher of cypherQueries) {
+			const sql = `SELECT * FROM cypher('${c.graph}', $$ ${cypher} $$) as (result agtype);`;
+			const result = await conn.query(sql);
+			results.push(result);
+		}
+
+		return results;
+	});
+}
+
 export async function disconnectAgeClient() {
 	if (client) {
 		try {
@@ -470,5 +594,11 @@ export default {
 	linkFieldToNpi,
 	linkFieldValueToNpi,
 	linkFields,
+	withTransaction,
+	batchCreateVertices,
+	batchUpsertVertices,
+	batchCreateEdges,
+	executeCypher,
+	executeCypherBatch,
 	disconnectAgeClient,
 };
