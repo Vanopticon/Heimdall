@@ -24,6 +24,8 @@ pub struct Settings {
 	pub rate_limit_burst: u32,
 	// AGE graph name to use when persisting
 	pub age_graph: String,
+	// PII master key (hex-encoded 32 bytes for AES-256)
+	pub pii_master_key: Option<String>,
 }
 
 impl Default for Settings {
@@ -45,6 +47,7 @@ impl Default for Settings {
 			rate_limit_rps: 10,
 			rate_limit_burst: 100,
 			age_graph: "heimdall_graph".to_string(),
+			pii_master_key: None,
 		}
 	}
 }
@@ -129,6 +132,11 @@ pub fn load() -> Result<Settings, SettingsError> {
 			if let Ok(parsed) = l.parse::<Level>() {
 				s.log_level = parsed;
 			}
+		}
+	}
+	if let Ok(k) = std::env::var("HMD_PII_MASTER_KEY") {
+		if !k.is_empty() {
+			s.pii_master_key = Some(k);
 		}
 	}
 

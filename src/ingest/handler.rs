@@ -199,6 +199,7 @@ mod tests {
 		let app_state = crate::state::AppState {
 			repo,
 			persist_sender: tx,
+			pii_engine: None,
 		};
 
 		let resp = bulk_dump_upload(axum::extract::State(app_state), req)
