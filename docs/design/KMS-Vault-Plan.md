@@ -407,12 +407,22 @@ path "transit/export/*" {
 	capabilities = ["deny"]
 }
 
-# Policy for enrichment workers (read-only decrypt)
+# Separate policy for enrichment workers (attach to worker service account)
+# Note: Workers only need decrypt capability, not encrypt
 path "transit/decrypt/heimdall-pii" {
 	capabilities = ["update"]
 }
 
-# Admin policy for key rotation
+path "transit/keys/heimdall-pii" {
+	capabilities = ["read"]
+}
+
+# Deny encrypt capability for workers
+path "transit/encrypt/heimdall-pii" {
+	capabilities = ["deny"]
+}
+
+# Admin policy for key rotation (attach to admin role only)
 path "transit/keys/heimdall-pii/rotate" {
 	capabilities = ["update"]
 }
@@ -566,12 +576,18 @@ pub enum KmsError {
     NetworkError(String),
 }
 
+pub struct KeyRotationResult {
+    pub old_version: u32,
+    pub new_version: u32,
+    pub rotated_at: chrono::DateTime<chrono::Utc>,
+}
+
 #[async_trait]
 pub trait KeyManagementService: Send + Sync {
     async fn encrypt(&self, plaintext: &[u8], context: &EncryptionContext) -> Result<EncryptedData, KmsError>;
     async fn decrypt(&self, encrypted: &EncryptedData, context: &EncryptionContext) -> Result<Vec<u8>, KmsError>;
     async fn generate_data_key(&self, key_id: &str) -> Result<DataKey, KmsError>;
-    async fn rotate_key(&self, key_id: &str) -> Result<(), KmsError>;
+    async fn rotate_key(&self, key_id: &str) -> Result<KeyRotationResult, KmsError>;
 }
 
 pub struct VaultKMS { /* ... */ }
@@ -636,30 +652,63 @@ pub enum ReencryptError {
     DecryptionError(String),
 }
 
+pub struct ReencryptionResult {
+    pub successful: usize,
+    pub failed: usize,
+    pub skipped: usize,
+    pub duration: Duration,
+}
+
 async fn reencrypt_batch(
     repo: &Arc<dyn AgeRepo>,
     kms: &Arc<dyn KeyManagementService>,
     env_key: &[u8],
     batch_size: usize,
-) -> Result<usize, ReencryptError> {
+) -> Result<ReencryptionResult, ReencryptError> {
+    let start = Instant::now();
+    let mut successful = 0;
+    let mut failed = 0;
+    let mut skipped = 0;
+    
     // Query for legacy encrypted fields
     let fields = repo.query_legacy_encrypted_fields(batch_size).await?;
     
     for field in fields {
-        // Decrypt with env key
-        let plaintext = decrypt_with_env_key(&field.ciphertext, env_key)?;
+        // Check if already migrated (in case of retry)
+        if field.encryption_version == EncryptionVersion::KmsV1 {
+            skipped += 1;
+            continue;
+        }
         
-        // Encrypt with KMS
-        let encrypted = kms.encrypt(&plaintext, &field.context).await?;
-        
-        // Update graph
-        repo.update_encrypted_field(&field.canonical_key, &encrypted).await?;
-        
-        // Increment metrics
-        REENCRYPTED_FIELDS.inc();
+        match (|| async {
+            // Decrypt with env key
+            let plaintext = decrypt_with_env_key(&field.ciphertext, env_key)?;
+            
+            // Encrypt with KMS
+            let encrypted = kms.encrypt(&plaintext, &field.context).await?;
+            
+            // Update graph
+            repo.update_encrypted_field(&field.canonical_key, &encrypted).await?;
+            
+            Ok::<_, ReencryptError>(())
+        })().await {
+            Ok(_) => {
+                successful += 1;
+                REENCRYPTED_FIELDS.inc();
+            }
+            Err(e) => {
+                failed += 1;
+                eprintln!("Failed to re-encrypt field {}: {}", field.canonical_key, e);
+            }
+        }
     }
     
-    Ok(fields.len())
+    Ok(ReencryptionResult {
+        successful,
+        failed,
+        skipped,
+        duration: start.elapsed(),
+    })
 }
 ```
 
