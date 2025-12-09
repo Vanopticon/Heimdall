@@ -23,11 +23,11 @@ Use the following format for feature files:
 
 The "passes" field should be set to false by default and updated to true once the feature has been successfully implemented and tested.
 
-## Long Term Memory (LTM) Management for Features
+## Long Term Memory (memory) Management for Features
 
-When working on features, ensure to update the Long Term Memory (LTM) with relevant information. The entry should be titled according to the feature, and the content should be the JSON representation of the feature, including its category, description, steps, and implementation status, wrapped in a code block for clarity.
+When working on features, ensure to update the Long Term Memory (memory) with relevant information. The entry should be titled according to the feature, and the content should be the JSON representation of the feature, including its category, description, steps, and implementation status, wrapped in a code block for clarity.
 
-**Example LTM Entry for a Feature:**
+**Example memory Entry for a Feature:**
 
 ````markdown
 # Feature: New Chat Button

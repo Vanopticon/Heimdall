@@ -122,7 +122,7 @@ fn extract_field_and_value(v: &Value) -> Option<(String, String)> {
 				// Heuristic: if object has one key that looks like a type, and the other is value
 				if map.len() == 1 {
 					if let Some((_k, val)) = map.iter().next() {
-						if let Some(s) = val.as_str() {
+						if let Some(_s) = val.as_str() {
 							// not enough info
 							return None;
 						}
@@ -196,6 +196,40 @@ mod tests {
 
 	#[test]
 	fn supports_array_and_csv_line() {
+		let ndjson = "[\"domain\", \"Example.COM\"]\nemail,user@EXAMPLE.COM\n";
+		let got = normalize_ndjson(ndjson).expect("normalize");
+		assert_eq!(got.len(), 2);
+		assert_eq!(got[0].canonical, "example.com");
+		assert_eq!(got[1].canonical, "user@example.com");
+	}
+}
+
+#[cfg(test)]
+mod tests_default {
+	use super::*;
+
+	#[test]
+	fn normalizes_ndjson_rows_default() {
+		let ndjson = r#"{"field_type":"domain","value":"Example.COM"}
+{"field_type":"ip","value":" 192.0.2.1 "}
+{"field_type":"hash","value":" ABCDEF123456 "}
+{"field_type":"email","value":"USER@EXAMPLE.COM"}
+"#;
+
+		let got = normalize_ndjson(ndjson).expect("normalize");
+		assert_eq!(got.len(), 4);
+		assert_eq!(got[0].field_type, "domain");
+		assert_eq!(got[0].canonical, "example.com");
+		assert_eq!(got[1].field_type, "ip");
+		assert_eq!(got[1].canonical, "192.0.2.1");
+		assert_eq!(got[2].field_type, "hash");
+		assert_eq!(got[2].canonical, "abcdef123456");
+		assert_eq!(got[3].field_type, "email");
+		assert_eq!(got[3].canonical, "user@example.com");
+	}
+
+	#[test]
+	fn supports_array_and_csv_line_default() {
 		let ndjson = "[\"domain\", \"Example.COM\"]\nemail,user@EXAMPLE.COM\n";
 		let got = normalize_ndjson(ndjson).expect("normalize");
 		assert_eq!(got.len(), 2);

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use serde_json::Value;
 use sqlx::PgPool;
 
@@ -29,37 +30,197 @@ impl AgeClient {
 	/// intended as a minimal example. In production code you should carefully
 	/// validate/escape inputs or use parameterization patterns if available.
 	pub async fn merge_entity(&self, label: &str, key: &str, props: &Value) -> Result<()> {
-		// Build a Cypher map from JSON properties
+		// Build a Cypher map from JSON properties, sanitizing keys and
+		// using JSON-serialized values to ensure proper escaping.
+		fn sanitize_prop_key(k: &str) -> String {
+			let mut out = String::new();
+			for c in k.chars() {
+				if c.is_ascii_alphanumeric() || c == '_' {
+					out.push(c);
+				} else {
+					out.push('_');
+				}
+			}
+			if out.is_empty() {
+				"prop".to_string()
+			} else {
+				out
+			}
+		}
+
 		let mut props_kv = Vec::new();
 		if let Value::Object(map) = props {
 			for (k, v) in map.iter() {
-				// Serialize each value to JSON and then embed into the Cypher literal
+				// Sanitize property key and serialize the value safely to JSON
+				let k_s = sanitize_prop_key(k);
 				let s = serde_json::to_string(v)?;
-				// Example: propKey: "value" or propNum: 123
-				props_kv.push(format!("{}: {}", k, s));
+				props_kv.push(format!("{}: {}", k_s, s));
 			}
 		}
 		let props_str = props_kv.join(", ");
 
+		// Sanitize label and serialize key using JSON encoding to ensure
+		// safe, quoted string injection into the Cypher statement.
+		fn sanitize_label(label: &str) -> String {
+			let mut out = String::new();
+			for c in label.chars() {
+				if c.is_ascii_alphanumeric() || c == '_' {
+					out.push(c);
+				}
+			}
+			if out.is_empty() {
+				"FieldValue".to_string()
+			} else {
+				out
+			}
+		}
+
+		let label_s = sanitize_label(label);
+		let key_json = serde_json::to_string(&key)?;
+
 		// Cypher MERGE statement (creates node if missing, otherwise matches)
 		let cypher = format!(
-			"MERGE (n:{label} {{canonical_key: \"{key}\"}}) SET n += {{{props}}} RETURN n",
-			label = label,
-			key = key.replace('\"', "\\\""),
+			"MERGE (n:{label} {{canonical_key: {key}}}) SET n += {{{props}}} RETURN n",
+			label = label_s,
+			key = key_json,
 			props = props_str
 		);
 
 		// Execute via AGE's `cypher` SQL function
-		let sql = format!(
-			"SELECT * FROM cypher($${}$$, $$ {} $$) as (v agtype);",
-			self.graph, cypher
-		);
+		// Use parameterized SQL to avoid embedding graph name or cypher
+		// into the outer SQL string. The `cypher` function takes the
+		// graph name and the Cypher query as text parameters.
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
 
 		// Fire the query; we don't need the returned row for this simple upsert
-		sqlx::query(&sql).execute(&self.pool).await?;
+		sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await?;
 		Ok(())
 	}
 }
+
+/// Trait abstraction for persistence operations so tests can substitute a
+/// mock implementation. Implemented by `AgeClient` and any test doubles.
+#[async_trait]
+pub trait AgeRepo: Send + Sync + 'static {
+	async fn merge_entity(&self, label: &str, key: &str, props: &Value) -> Result<()>;
+	/// Lightweight ping to verify DB connectivity / readiness.
+	async fn ping(&self) -> Result<()>;
+	/// Merge a batch of entities in a single Cypher call for improved
+	/// throughput. Implementations should attempt to execute the batch in
+	/// a single `cypher` invocation where possible and fall back to per-item
+	/// merges on partial failure.
+	async fn merge_batch(&self, items: &[(String, String, Value)]) -> Result<()>;
+}
+
+#[async_trait]
+impl AgeRepo for AgeClient {
+	async fn merge_entity(&self, label: &str, key: &str, props: &Value) -> Result<()> {
+		// Call the inherent method
+		AgeClient::merge_entity(self, label, key, props).await
+	}
+
+	async fn ping(&self) -> Result<()> {
+		// Simple lightweight query to verify the connection
+		// We don't need the returned row; success indicates connectivity.
+		sqlx::query("SELECT 1").fetch_one(&self.pool).await?;
+		Ok(())
+	}
+
+	async fn merge_batch(&self, items: &[(String, String, Value)]) -> Result<()> {
+		if items.is_empty() {
+			return Ok(());
+		}
+
+		// Build a single Cypher script with multiple MERGE statements while
+		// sanitizing keys and labels. Values are JSON-serialized to ensure
+		// correct escaping. Property keys are transformed to a safe
+		// identifier (alphanumeric + underscore).
+		fn sanitize_label(label: &str) -> String {
+			let mut out = String::new();
+			for c in label.chars() {
+				if c.is_ascii_alphanumeric() || c == '_' {
+					out.push(c);
+				}
+			}
+			if out.is_empty() {
+				"FieldValue".to_string()
+			} else {
+				out
+			}
+		}
+
+		fn sanitize_prop_key(k: &str) -> String {
+			let mut out = String::new();
+			for c in k.chars() {
+				if c.is_ascii_alphanumeric() || c == '_' {
+					out.push(c);
+				} else {
+					out.push('_');
+				}
+			}
+			if out.is_empty() {
+				"prop".to_string()
+			} else {
+				out
+			}
+		}
+
+		let mut stmts: Vec<String> = Vec::with_capacity(items.len());
+		for (label, key, props) in items.iter() {
+			let label_s = sanitize_label(label);
+			let mut props_kv = Vec::new();
+			if let Value::Object(map) = props {
+				for (k, v) in map.iter() {
+					let k_s = sanitize_prop_key(k);
+					let s = serde_json::to_string(v)?;
+					props_kv.push(format!("{}: {}", k_s, s));
+				}
+			}
+			let props_str = props_kv.join(", ");
+			let key_json = serde_json::to_string(key)?;
+			let stmt = format!(
+				"MERGE (n:{label} {{canonical_key: {key}}}) SET n += {{{props}}}",
+				label = label_s,
+				key = key_json,
+				props = props_str
+			);
+			stmts.push(stmt);
+		}
+
+		let cypher = stmts.join("\n");
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+
+		// Execute batch
+		let res = sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await;
+
+		match res {
+			Ok(_) => Ok(()),
+			Err(e) => {
+				// On batch failure, attempt per-item merges to make progress
+				eprintln!("batch merge failed: {}; falling back to per-item merges", e);
+				for (label, key, props) in items.iter() {
+					if let Err(e2) = AgeClient::merge_entity(self, label, key, props).await {
+						eprintln!("per-item merge failed for {}: {}", key, e2);
+					}
+				}
+				Ok(())
+			}
+		}
+	}
+}
+
+// NOTE: Global repo helpers were intentionally removed in favor of
+// injecting the shared `Arc<dyn AgeRepo>` into application state. Use
+// `crate::state::AppState` (or pass an Arc<dyn AgeRepo>) when handlers
+// need persistence.
 
 #[cfg(feature = "integration-tests")]
 mod tests {
