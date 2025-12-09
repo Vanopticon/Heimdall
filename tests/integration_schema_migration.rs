@@ -1,14 +1,13 @@
 // Integration tests for SQL schema migrations and row persistence
 use std::env;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use vanopticon_heimdall::age_client::{AgeClient, AgeRepo};
 
 /// Helper to wait for Postgres to be ready
 async fn wait_for_postgres() -> sqlx::PgPool {
 	let mut attempts = 0;
 	loop {
-		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await
-		{
+		match sqlx::PgPool::connect("postgres://heimdall:heimdall@127.0.0.1:5432/heimdall").await {
 			Ok(p) => break p,
 			Err(_) => {
 				attempts += 1;

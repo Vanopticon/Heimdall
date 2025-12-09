@@ -135,6 +135,73 @@ mod tests {
 
 	#[tokio::test]
 	async fn handler_accepts_ndjson_stream() {
+		use std::sync::Arc;
+		use tokio::sync::mpsc;
+
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn persist_row(
+				&self,
+				_dump_id: &str,
+				_row_index: i64,
+				_row_hash: Option<&str>,
+				_cells: &[(String, String, String, String)],
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn increment_co_occurrence(
+				&self,
+				_a_key: &str,
+				_b_key: &str,
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn persist_credential(
+				&self,
+				_from_key: &str,
+				_to_key: &str,
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn apply_migration(&self, _sql_content: &str) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+		};
+
 		let payload = r#"{"field_type":"domain","value":"Example.COM"}
 {"field_type":"email","value":"USER@EXAMPLE.COM"}
 "#;
@@ -145,7 +212,9 @@ mod tests {
 			.body(Body::from(payload.to_string()))
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
+		let resp = ndjson_upload(axum::extract::State(app_state), req)
+			.await
+			.into_response();
 		assert_eq!(resp.status(), StatusCode::OK);
 	}
 
@@ -191,6 +260,39 @@ mod tests {
 			) -> anyhow::Result<()> {
 				Ok(())
 			}
+
+			async fn persist_row(
+				&self,
+				_dump_id: &str,
+				_row_index: i64,
+				_row_hash: Option<&str>,
+				_cells: &[(String, String, String, String)],
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn increment_co_occurrence(
+				&self,
+				_a_key: &str,
+				_b_key: &str,
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn persist_credential(
+				&self,
+				_from_key: &str,
+				_to_key: &str,
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn apply_migration(&self, _sql_content: &str) -> anyhow::Result<()> {
+				Ok(())
+			}
 		}
 
 		let (tx, _rx) = mpsc::channel(16);
@@ -208,6 +310,73 @@ mod tests {
 
 	#[tokio::test]
 	async fn ndjson_streaming_chunked_lines() {
+		use std::sync::Arc;
+		use tokio::sync::mpsc;
+
+		struct DummyRepo;
+		#[async_trait::async_trait]
+		impl crate::age_client::AgeRepo for DummyRepo {
+			async fn merge_entity(
+				&self,
+				_label: &str,
+				_key: &str,
+				_props: &serde_json::Value,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn ping(&self) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn merge_batch(
+				&self,
+				_items: &[(String, String, serde_json::Value)],
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn persist_row(
+				&self,
+				_dump_id: &str,
+				_row_index: i64,
+				_row_hash: Option<&str>,
+				_cells: &[(String, String, String, String)],
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn increment_co_occurrence(
+				&self,
+				_a_key: &str,
+				_b_key: &str,
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn persist_credential(
+				&self,
+				_from_key: &str,
+				_to_key: &str,
+				_timestamp: &str,
+			) -> anyhow::Result<()> {
+				Ok(())
+			}
+
+			async fn apply_migration(&self, _sql_content: &str) -> anyhow::Result<()> {
+				Ok(())
+			}
+		}
+
+		let (tx, _rx) = mpsc::channel(16);
+		let repo: Arc<dyn crate::age_client::AgeRepo> = Arc::new(DummyRepo);
+		let app_state = crate::state::AppState {
+			repo,
+			persist_sender: tx,
+		};
+
 		// Simulate a NDJSON upload where a single JSON object is split across chunks
 		let s = stream::iter(vec![
 			Ok::<_, std::io::Error>(b"{".to_vec()),
@@ -226,7 +395,9 @@ mod tests {
 			.body(body)
 			.unwrap();
 
-		let resp = ndjson_upload(req).await.into_response();
+		let resp = ndjson_upload(axum::extract::State(app_state), req)
+			.await
+			.into_response();
 		assert_eq!(resp.status(), StatusCode::OK);
 
 		// Optionally parse and assert the returned JSON contains normalized entries

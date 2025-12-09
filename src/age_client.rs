@@ -161,14 +161,20 @@ impl AgeClient {
 				"\nMERGE ({}:FieldValue {{canonical_key: {}}}) ON CREATE SET {}.value = {}, {}.created_at = {}",
 				fv_var, canonical_key_json, fv_var, canonical_value_json, fv_var, timestamp_json
 			));
-			cypher.push_str(&format!("\nMERGE ({}:Field {{name: {}}})", f_var, column_json));
+			cypher.push_str(&format!(
+				"\nMERGE ({}:Field {{name: {}}})",
+				f_var, column_json
+			));
 			cypher.push_str(&format!("\nMERGE ({})-[:VALUE_OF]->({})", fv_var, f_var));
 			cypher.push_str(&format!(
 				"\nCREATE ({}:Sighting {{column: {}, raw: {}, timestamp: {}}})",
 				s_var, column_json, raw_json, timestamp_json
 			));
 			cypher.push_str(&format!("\nCREATE (r)-[:HAS_SIGHTING]->({})", s_var));
-			cypher.push_str(&format!("\nCREATE ({})-[:OBSERVED_VALUE]->({})", s_var, fv_var));
+			cypher.push_str(&format!(
+				"\nCREATE ({})-[:OBSERVED_VALUE]->({})",
+				s_var, fv_var
+			));
 		}
 
 		cypher.push_str("\nRETURN r");
@@ -291,11 +297,15 @@ pub trait AgeRepo: Send + Sync + 'static {
 		timestamp: &str,
 	) -> Result<()>;
 	/// Increment co-occurrence count between two canonical values.
-	async fn increment_co_occurrence(&self, a_key: &str, b_key: &str, timestamp: &str)
-		-> Result<()>;
+	async fn increment_co_occurrence(
+		&self,
+		a_key: &str,
+		b_key: &str,
+		timestamp: &str,
+	) -> Result<()>;
 	/// Persist a credential relationship (e.g., email -> password).
 	async fn persist_credential(&self, from_key: &str, to_key: &str, timestamp: &str)
-		-> Result<()>;
+	-> Result<()>;
 	/// Apply SQL migrations to set up the graph schema.
 	async fn apply_migration(&self, sql_content: &str) -> Result<()>;
 }
