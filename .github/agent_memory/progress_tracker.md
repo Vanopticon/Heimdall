@@ -5,6 +5,7 @@
 ### Completed Tasks
 
 - [x] **Task 0.1: Configuration Module (Environment-First)** — Implemented centralized configuration module with HMD_* environment variable support, unit tests, CI workflow, and documentation.
+- [x] **Task 0.2: Migration and Backfill Plan (ARCH-001.5)** — Created comprehensive migration plan document for canonical key versioning with strategies, backfill pseudocode, validation procedures, and staged rollout plan.
 
 ### In Progress
 
@@ -18,6 +19,32 @@ None
 - [ ] Milestone 3: API & UI Components
 
 ## Recent Work Summary
+
+### 2025-12-09: Migration and Backfill Plan (ARCH-001.5)
+
+**What was completed:**
+
+- Created comprehensive migration plan document at `docs/design/Migration-Backfill-Plan.md`
+- Documented three migration strategies with trade-offs:
+  - Shadow Property Migration (recommended)
+  - In-Place Transformation
+  - Node Duplication with Edge Reconciliation
+- Provided backfill pseudocode with batch processing and resume capability
+- Defined canonical key version tagging strategy (v1, v2, etc.)
+- Documented validation and smoke test procedures
+- Created staged rollout plan (5 phases over 8-9 weeks)
+- Included rollback procedures for each migration phase
+- Created feature card (ARCH-001.5-Migration-Backfill-Plan.md and .feature.json)
+- Updated Implementation-Roadmap.md with Task 0.2
+
+**Key Deliverables:**
+
+- Migration plan addresses future schema evolution needs
+- Versioning strategy: `canonical_key_version` + `canonical_key` properties
+- Backfill job design: batch processing with progress tracking
+- Compatibility: dual-read pattern during migration
+- Validation: 5 smoke test categories defined
+- Monitoring: metrics and alerting thresholds specified
 
 ### 2025-12-08: Configuration Module Implementation
 
@@ -50,3 +77,5 @@ None
 - CI workflow runs on all PRs and pushes to main/v1.0.0
 - Feature cards follow established pattern with .md and .feature.json files
 - All deliverables from Task 0.1 completed successfully
+- ARCH-001.5 migration plan provides operational framework for future schema evolution
+- Migration strategies support backward compatibility during transitions

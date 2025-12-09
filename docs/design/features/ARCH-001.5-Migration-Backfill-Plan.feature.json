@@ -1,0 +1,15 @@
+{
+	"category": "design",
+	"description": "Migration and backfill plan for canonical_key / row_hash versioning with incremental processing and compatibility strategy",
+	"passes": false,
+	"steps": [
+		"Analyze current key generation patterns in ageClient.ts",
+		"Document multiple migration strategies with trade-offs",
+		"Define canonical key version tagging strategy (v1, v2, etc.)",
+		"Create backfill pseudocode with batch processing and resume capability",
+		"Document validation and smoke test procedures",
+		"Define staged rollout phases and timelines",
+		"Document rollback procedures for each migration phase",
+		"Create feature card and update Implementation Roadmap"
+	]
+}

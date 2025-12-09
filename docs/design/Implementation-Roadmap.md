@@ -28,6 +28,33 @@ This document tracks the implementation milestones for Heimdall.
 - Configuration module documented in README
 - CI workflow runs successfully
 
+### Task 0.2: Migration and Backfill Plan for Canonical Keys
+
+**Status**: Completed
+
+**Description**: Design a comprehensive migration and backfill plan to handle future changes to canonical key or row-hash semantics in the graph data model.
+
+**Deliverables**:
+
+- `docs/design/Migration-Backfill-Plan.md` — Comprehensive migration strategy document
+- Feature card documenting acceptance criteria and implementation approach
+- Migration strategies with trade-offs (Shadow Property, In-Place, Node Duplication)
+- Backfill pseudocode with batch processing and resume capability
+- Validation and smoke test procedures
+- Staged rollout plan with timelines
+- Rollback procedures for each phase
+
+**Feature Card**: [ARCH-001.5-Migration-Backfill-Plan](features/ARCH-001.5-Migration-Backfill-Plan.md)
+
+**Acceptance Criteria**:
+
+- Migration plan document exists with multiple strategies documented
+- Canonical key versioning strategy defined
+- Backfill job design shows incremental, resumable processing
+- Smoke tests and validation procedures included
+- Staged rollout phases defined
+- Rollback procedures documented
+
 ### Future Tasks
 
 Additional tasks for Milestone 0 will be added as planning progresses.
