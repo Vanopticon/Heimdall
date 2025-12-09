@@ -562,6 +562,7 @@ path "transit/keys/heimdall-pii/config" {
 - Implement `KeyManagementService` trait in `src/crypto/kms.rs`:
 
 ```rust
+use async_trait::async_trait;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -640,6 +641,8 @@ match field.encryption_version {
 **Re-encryption Algorithm**:
 
 ```rust
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
