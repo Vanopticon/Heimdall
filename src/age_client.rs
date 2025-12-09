@@ -3,6 +3,40 @@ use async_trait::async_trait;
 use serde_json::Value;
 use sqlx::PgPool;
 
+/// Sanitize a property key by replacing non-alphanumeric characters with underscores.
+/// Returns "prop" if the result would be empty.
+fn sanitize_prop_key(k: &str) -> String {
+	let mut out = String::new();
+	for c in k.chars() {
+		if c.is_ascii_alphanumeric() || c == '_' {
+			out.push(c);
+		} else {
+			out.push('_');
+		}
+	}
+	if out.is_empty() {
+		"prop".to_string()
+	} else {
+		out
+	}
+}
+
+/// Sanitize a Cypher label by removing non-alphanumeric characters.
+/// Returns "FieldValue" if the result would be empty.
+fn sanitize_label(label: &str) -> String {
+	let mut out = String::new();
+	for c in label.chars() {
+		if c.is_ascii_alphanumeric() || c == '_' {
+			out.push(c);
+		}
+	}
+	if out.is_empty() {
+		"FieldValue".to_string()
+	} else {
+		out
+	}
+}
+
 /// Minimal AGE client wrapper for Postgres + Apache AGE.
 pub struct AgeClient {
 	pool: PgPool,
@@ -32,22 +66,6 @@ impl AgeClient {
 	pub async fn merge_entity(&self, label: &str, key: &str, props: &Value) -> Result<()> {
 		// Build a Cypher map from JSON properties, sanitizing keys and
 		// using JSON-serialized values to ensure proper escaping.
-		fn sanitize_prop_key(k: &str) -> String {
-			let mut out = String::new();
-			for c in k.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				} else {
-					out.push('_');
-				}
-			}
-			if out.is_empty() {
-				"prop".to_string()
-			} else {
-				out
-			}
-		}
-
 		let mut props_kv = Vec::new();
 		if let Value::Object(map) = props {
 			for (k, v) in map.iter() {
@@ -61,20 +79,6 @@ impl AgeClient {
 
 		// Sanitize label and serialize key using JSON encoding to ensure
 		// safe, quoted string injection into the Cypher statement.
-		fn sanitize_label(label: &str) -> String {
-			let mut out = String::new();
-			for c in label.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				}
-			}
-			if out.is_empty() {
-				"FieldValue".to_string()
-			} else {
-				out
-			}
-		}
-
 		let label_s = sanitize_label(label);
 		let key_json = serde_json::to_string(&key)?;
 
@@ -100,6 +104,192 @@ impl AgeClient {
 			.await?;
 		Ok(())
 	}
+
+	/// Persist a single row with its cells (sightings) into the graph.
+	///
+	/// This creates Row + Sighting nodes and links them to canonical FieldValue nodes.
+	/// The row structure is preserved for provenance while deduplicating values.
+	///
+	/// # Arguments
+	/// * `dump_id` - Unique identifier for the parent Dump
+	/// * `row_index` - Zero-based row number in the dump
+	/// * `row_hash` - Optional canonical hash of the row for duplicate detection
+	/// * `cells` - Vector of (column_name, raw_value, canonical_key, canonical_value) tuples
+	/// * `timestamp` - ISO8601 timestamp string for the sighting
+	pub async fn persist_row(
+		&self,
+		dump_id: &str,
+		row_index: i64,
+		row_hash: Option<&str>,
+		cells: &[(String, String, String, String)],
+		timestamp: &str,
+	) -> Result<()> {
+		// Build Cypher statements for row and sighting creation
+		let dump_id_json = serde_json::to_string(dump_id)?;
+		let timestamp_json = serde_json::to_string(timestamp)?;
+
+		// Start building the Cypher script
+		let mut cypher = format!(
+			"MERGE (d:Dump {{id: {}}}) ON CREATE SET d.received_at = {}",
+			dump_id_json, timestamp_json
+		);
+
+		// Create row node with optional row_hash
+		if let Some(hash) = row_hash {
+			let hash_json = serde_json::to_string(hash)?;
+			cypher.push_str(&format!(
+				"\nCREATE (r:Row {{dump_id: {}, index: {}, row_hash: {}}}))",
+				dump_id_json, row_index, hash_json
+			));
+		} else {
+			cypher.push_str(&format!(
+				"\nCREATE (r:Row {{dump_id: {}, index: {}}})",
+				dump_id_json, row_index
+			));
+		}
+		cypher.push_str("\nCREATE (d)-[:HAS_ROW]->(r)");
+
+		// Process each cell
+		for (i, (column, raw, canonical_key, canonical_value)) in cells.iter().enumerate() {
+			let column_json = serde_json::to_string(column)?;
+			let raw_json = serde_json::to_string(raw)?;
+			let canonical_key_json = serde_json::to_string(canonical_key)?;
+			let canonical_value_json = serde_json::to_string(canonical_value)?;
+
+			// Use unique variable names for each cell
+			let fv_var = format!("fv{}", i);
+			let f_var = format!("f{}", i);
+			let s_var = format!("s{}", i);
+
+			cypher.push_str(&format!(
+				"\nMERGE ({}:FieldValue {{canonical_key: {}}}) ON CREATE SET {}.value = {}, {}.created_at = {}",
+				fv_var, canonical_key_json, fv_var, canonical_value_json, fv_var, timestamp_json
+			));
+			cypher.push_str(&format!(
+				"\nMERGE ({}:Field {{name: {}}})",
+				f_var, column_json
+			));
+			cypher.push_str(&format!("\nMERGE ({})-[:VALUE_OF]->({})", fv_var, f_var));
+			cypher.push_str(&format!(
+				"\nCREATE ({}:Sighting {{column: {}, raw: {}, timestamp: {}}})",
+				s_var, column_json, raw_json, timestamp_json
+			));
+			cypher.push_str(&format!("\nCREATE (r)-[:HAS_SIGHTING]->({})", s_var));
+			cypher.push_str(&format!(
+				"\nCREATE ({})-[:OBSERVED_VALUE]->({})",
+				s_var, fv_var
+			));
+		}
+
+		cypher.push_str("\nRETURN r");
+
+		// Execute the Cypher script
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+		sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await?;
+
+		Ok(())
+	}
+
+	/// Increment co-occurrence count between two canonical values.
+	///
+	/// Creates or updates a CO_OCCURS relationship between two FieldValue nodes.
+	/// Uses deterministic ordering (a_key < b_key) to avoid duplicate edges.
+	pub async fn increment_co_occurrence(
+		&self,
+		a_key: &str,
+		b_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		// Ensure deterministic ordering
+		let (first, second) = if a_key < b_key {
+			(a_key, b_key)
+		} else {
+			(b_key, a_key)
+		};
+
+		let first_json = serde_json::to_string(first)?;
+		let second_json = serde_json::to_string(second)?;
+		let timestamp_json = serde_json::to_string(timestamp)?;
+
+		let cypher = format!(
+			"MERGE (a:FieldValue {{canonical_key: {}}}) \
+			 MERGE (b:FieldValue {{canonical_key: {}}}) \
+			 MERGE (a)-[co:CO_OCCURS]-(b) \
+			 SET co.count = coalesce(co.count, 0) + 1, co.last_seen = {} \
+			 RETURN co",
+			first_json, second_json, timestamp_json
+		);
+
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+		sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await?;
+
+		Ok(())
+	}
+
+	/// Persist a credential relationship (e.g., email -> password).
+	///
+	/// Creates or updates a CREDENTIAL edge with count and last_seen tracking.
+	pub async fn persist_credential(
+		&self,
+		from_key: &str,
+		to_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		let from_json = serde_json::to_string(from_key)?;
+		let to_json = serde_json::to_string(to_key)?;
+		let timestamp_json = serde_json::to_string(timestamp)?;
+
+		let cypher = format!(
+			"MERGE (a:FieldValue {{canonical_key: {}}}) \
+			 MERGE (b:FieldValue {{canonical_key: {}}}) \
+			 MERGE (a)-[c:CREDENTIAL]->(b) \
+			 SET c.count = coalesce(c.count, 0) + 1, c.last_seen = {} \
+			 RETURN c",
+			from_json, to_json, timestamp_json
+		);
+
+		let sql = "SELECT * FROM cypher($1::text, $2::text) as (v agtype);";
+		sqlx::query(sql)
+			.bind(&self.graph)
+			.bind(&cypher)
+			.execute(&self.pool)
+			.await?;
+
+		Ok(())
+	}
+
+	/// Apply SQL migrations from a file to set up the graph schema.
+	///
+	/// This executes raw SQL statements (including Cypher via AGE functions)
+	/// to initialize the graph structure, indices, and labels.
+	///
+	/// **Important Limitations:**
+	/// - Executes the entire SQL content as a single statement batch
+	/// - Does not parse individual statements or handle complex transaction boundaries
+	/// - Suitable for initial schema setup and idempotent migration scripts
+	/// - For production use with multiple migrations, consider using a dedicated
+	///   migration tool like `sqlx-cli` or `refinery` that supports proper
+	///   versioning, rollback, and statement-by-statement execution
+	///
+	/// **Safety:**
+	/// - Only execute trusted SQL content (typically embedded via `include_str!`)
+	/// - Never pass user-provided content to this method
+	/// - Ensure migrations are idempotent (use CREATE IF NOT EXISTS, MERGE, etc.)
+	pub async fn apply_migration(&self, sql_content: &str) -> Result<()> {
+		// Execute the SQL content directly as a batch.
+		// This works for simple DO blocks and CREATE IF NOT EXISTS statements
+		// but does not handle complex multi-statement scripts with dependencies.
+		sqlx::query(sql_content).execute(&self.pool).await?;
+		Ok(())
+	}
 }
 
 /// Trait abstraction for persistence operations so tests can substitute a
@@ -114,6 +304,27 @@ pub trait AgeRepo: Send + Sync + 'static {
 	/// a single `cypher` invocation where possible and fall back to per-item
 	/// merges on partial failure.
 	async fn merge_batch(&self, items: &[(String, String, Value)]) -> Result<()>;
+	/// Persist a single row with its cells into the graph.
+	async fn persist_row(
+		&self,
+		dump_id: &str,
+		row_index: i64,
+		row_hash: Option<&str>,
+		cells: &[(String, String, String, String)],
+		timestamp: &str,
+	) -> Result<()>;
+	/// Increment co-occurrence count between two canonical values.
+	async fn increment_co_occurrence(
+		&self,
+		a_key: &str,
+		b_key: &str,
+		timestamp: &str,
+	) -> Result<()>;
+	/// Persist a credential relationship (e.g., email -> password).
+	async fn persist_credential(&self, from_key: &str, to_key: &str, timestamp: &str)
+	-> Result<()>;
+	/// Apply SQL migrations to set up the graph schema.
+	async fn apply_migration(&self, sql_content: &str) -> Result<()>;
 }
 
 #[async_trait]
@@ -139,36 +350,6 @@ impl AgeRepo for AgeClient {
 		// sanitizing keys and labels. Values are JSON-serialized to ensure
 		// correct escaping. Property keys are transformed to a safe
 		// identifier (alphanumeric + underscore).
-		fn sanitize_label(label: &str) -> String {
-			let mut out = String::new();
-			for c in label.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				}
-			}
-			if out.is_empty() {
-				"FieldValue".to_string()
-			} else {
-				out
-			}
-		}
-
-		fn sanitize_prop_key(k: &str) -> String {
-			let mut out = String::new();
-			for c in k.chars() {
-				if c.is_ascii_alphanumeric() || c == '_' {
-					out.push(c);
-				} else {
-					out.push('_');
-				}
-			}
-			if out.is_empty() {
-				"prop".to_string()
-			} else {
-				out
-			}
-		}
-
 		let mut stmts: Vec<String> = Vec::with_capacity(items.len());
 		for (label, key, props) in items.iter() {
 			let label_s = sanitize_label(label);
@@ -215,6 +396,39 @@ impl AgeRepo for AgeClient {
 			}
 		}
 	}
+
+	async fn persist_row(
+		&self,
+		dump_id: &str,
+		row_index: i64,
+		row_hash: Option<&str>,
+		cells: &[(String, String, String, String)],
+		timestamp: &str,
+	) -> Result<()> {
+		AgeClient::persist_row(self, dump_id, row_index, row_hash, cells, timestamp).await
+	}
+
+	async fn increment_co_occurrence(
+		&self,
+		a_key: &str,
+		b_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		AgeClient::increment_co_occurrence(self, a_key, b_key, timestamp).await
+	}
+
+	async fn persist_credential(
+		&self,
+		from_key: &str,
+		to_key: &str,
+		timestamp: &str,
+	) -> Result<()> {
+		AgeClient::persist_credential(self, from_key, to_key, timestamp).await
+	}
+
+	async fn apply_migration(&self, sql_content: &str) -> Result<()> {
+		AgeClient::apply_migration(self, sql_content).await
+	}
 }
 
 // NOTE: Global repo helpers were intentionally removed in favor of
@@ -222,16 +436,187 @@ impl AgeRepo for AgeClient {
 // `crate::state::AppState` (or pass an Arc<dyn AgeRepo>) when handlers
 // need persistence.
 
-#[cfg(feature = "integration-tests")]
+#[cfg(test)]
 mod tests {
 	use super::*;
-	use serde_json::json;
 
-	// Note: This test is a compile-time smoke test only and does not connect to a DB.
-	#[tokio::test]
-	async fn client_smoke() {
-		// connecting to a real DB is outside unit test scope here; just ensure types work
-		let url = "postgres://heimdall:heimdall@localhost/heimdall";
-		let _ = AgeClient::connect(url, "heimdall_graph").await;
+	#[test]
+	fn sanitize_prop_key_alphanumeric() {
+		assert_eq!(sanitize_prop_key("valid_key123"), "valid_key123");
+	}
+
+	#[test]
+	fn sanitize_prop_key_special_chars() {
+		assert_eq!(sanitize_prop_key("key-with-dashes"), "key_with_dashes");
+		assert_eq!(sanitize_prop_key("key.with.dots"), "key_with_dots");
+		assert_eq!(sanitize_prop_key("key:with:colons"), "key_with_colons");
+	}
+
+	#[test]
+	fn sanitize_prop_key_empty() {
+		assert_eq!(sanitize_prop_key(""), "prop");
+		assert_eq!(sanitize_prop_key("!!!"), "___");
+	}
+
+	#[test]
+	fn sanitize_prop_key_unicode() {
+		// Unicode characters are replaced with underscores, except ASCII alphanumeric and underscore
+		let result = sanitize_prop_key("key_with_émojis_🔥");
+		assert!(result.starts_with("key_with_"));
+		// Verify no unicode characters remain
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_prop_key_sql_injection_attempt() {
+		// SQL injection attempts should be sanitized to underscores
+		let result = sanitize_prop_key("'; DROP TABLE users; --");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+		assert!(result.contains("DROP_TABLE_users"));
+	}
+
+	#[test]
+	fn sanitize_label_alphanumeric() {
+		assert_eq!(sanitize_label("ValidLabel"), "ValidLabel");
+		assert_eq!(sanitize_label("Label_123"), "Label_123");
+	}
+
+	#[test]
+	fn sanitize_label_special_chars() {
+		assert_eq!(sanitize_label("Label-With-Dashes"), "LabelWithDashes");
+		assert_eq!(sanitize_label("Label.With.Dots"), "LabelWithDots");
+	}
+
+	#[test]
+	fn sanitize_label_empty() {
+		assert_eq!(sanitize_label(""), "FieldValue");
+		assert_eq!(sanitize_label("!!!"), "FieldValue");
+	}
+
+	#[test]
+	fn sanitize_label_cypher_injection_attempt() {
+		assert_eq!(sanitize_label("Label'); MATCH (n)--"), "LabelMATCHn");
+	}
+
+	#[test]
+	fn sanitize_label_unicode() {
+		// Unicode characters are removed, keeping only ASCII alphanumeric and underscore
+		let result = sanitize_label("Label_with_émojis_🔥");
+		assert!(result.starts_with("Label_with_"));
+		// Verify only ASCII alphanumeric and underscore remain
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	// Security-focused tests
+	#[test]
+	fn sanitize_prop_key_prevents_cypher_command_injection() {
+		// Test various Cypher command injection attempts
+		let attempts = vec![
+			"MATCH (n) RETURN n",
+			"CREATE (n:Evil)",
+			"DELETE n",
+			"DETACH DELETE n",
+			"SET n.prop = 'value'",
+			"MERGE (n:Node)",
+		];
+
+		for attempt in attempts {
+			let result = sanitize_prop_key(attempt);
+			// Result should contain only alphanumeric and underscores
+			assert!(
+				result
+					.chars()
+					.all(|c| c.is_ascii_alphanumeric() || c == '_'),
+				"Failed to sanitize: {}",
+				attempt
+			);
+		}
+	}
+
+	#[test]
+	fn sanitize_label_prevents_cypher_command_injection() {
+		// Test various Cypher command injection attempts in labels
+		let attempts = vec![
+			"Label); CREATE (e:Evil)-[:OWNS]->(n",
+			"Label'); DROP DATABASE test; MATCH (n",
+			"Label RETURN n; MATCH (x",
+		];
+
+		for attempt in attempts {
+			let result = sanitize_label(attempt);
+			// Result should contain only alphanumeric and underscores, or default to FieldValue
+			assert!(
+				result
+					.chars()
+					.all(|c| c.is_ascii_alphanumeric() || c == '_'),
+				"Failed to sanitize label: {}",
+				attempt
+			);
+		}
+	}
+
+	#[test]
+	fn sanitize_prop_key_handles_null_bytes() {
+		// Null bytes should be sanitized to underscores
+		let result = sanitize_prop_key("key\0with\0nulls");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_label_handles_null_bytes() {
+		// Null bytes should be removed
+		let result = sanitize_label("Label\0With\0Nulls");
+		assert!(
+			result
+				.chars()
+				.all(|c| c.is_ascii_alphanumeric() || c == '_')
+		);
+	}
+
+	#[test]
+	fn sanitize_prop_key_handles_very_long_input() {
+		// Test with a very long string to ensure no panics or buffer issues
+		let long_key = "a".repeat(10000);
+		let result = sanitize_prop_key(&long_key);
+		assert_eq!(result.len(), 10000);
+		assert!(result.chars().all(|c| c == 'a'));
+	}
+
+	#[test]
+	fn sanitize_label_handles_very_long_input() {
+		// Test with a very long string
+		let long_label = "L".repeat(10000);
+		let result = sanitize_label(&long_label);
+		assert_eq!(result.len(), 10000);
+		assert!(result.chars().all(|c| c == 'L'));
+	}
+
+	#[cfg(feature = "integration-tests")]
+	mod integration {
+		use super::*;
+
+		// Note: This test is a compile-time smoke test only and does not connect to a DB.
+		#[tokio::test]
+		async fn client_smoke() {
+			// connecting to a real DB is outside unit test scope here; just ensure types work
+			let url = "postgres://heimdall:heimdall@localhost/heimdall";
+			let _ = AgeClient::connect(url, "heimdall_graph").await;
+		}
 	}
 }

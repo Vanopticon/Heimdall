@@ -24,6 +24,12 @@ pub struct Settings {
 	pub rate_limit_burst: u32,
 	// AGE graph name to use when persisting
 	pub age_graph: String,
+	// Sync configuration
+	pub sync_enabled: bool,
+	pub sync_node_id: String,
+	pub oidc_discovery_url: String,
+	pub oidc_client_id: String,
+	pub oidc_client_secret: String,
 }
 
 impl Default for Settings {
@@ -32,6 +38,9 @@ impl Default for Settings {
 			.ok()
 			.and_then(|s| s.into_string().ok())
 			.unwrap_or_else(|| "127.0.0.1".to_string());
+
+		// Generate a default node ID based on hostname to avoid collisions
+		let default_node_id = format!("heimdall-{}", host.replace(".", "-"));
 
 		Self {
 			host,
@@ -45,6 +54,11 @@ impl Default for Settings {
 			rate_limit_rps: 10,
 			rate_limit_burst: 100,
 			age_graph: "heimdall_graph".to_string(),
+			sync_enabled: false,
+			sync_node_id: default_node_id,
+			oidc_discovery_url: "".to_string(),
+			oidc_client_id: "".to_string(),
+			oidc_client_secret: "".to_string(),
 		}
 	}
 }
@@ -129,6 +143,33 @@ pub fn load() -> Result<Settings, SettingsError> {
 			if let Ok(parsed) = l.parse::<Level>() {
 				s.log_level = parsed;
 			}
+		}
+	}
+	if let Ok(e) = std::env::var("HMD_SYNC_ENABLED") {
+		if !e.is_empty() {
+			if let Ok(parsed) = e.parse::<bool>() {
+				s.sync_enabled = parsed;
+			}
+		}
+	}
+	if let Ok(n) = std::env::var("HMD_SYNC_NODE_ID") {
+		if !n.is_empty() {
+			s.sync_node_id = n;
+		}
+	}
+	if let Ok(u) = std::env::var("HMD_OIDC_DISCOVERY_URL") {
+		if !u.is_empty() {
+			s.oidc_discovery_url = u;
+		}
+	}
+	if let Ok(c) = std::env::var("HMD_OIDC_CLIENT_ID") {
+		if !c.is_empty() {
+			s.oidc_client_id = c;
+		}
+	}
+	if let Ok(s2) = std::env::var("HMD_OIDC_CLIENT_SECRET") {
+		if !s2.is_empty() {
+			s.oidc_client_secret = s2;
 		}
 	}
 

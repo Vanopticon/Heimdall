@@ -8,5 +8,5 @@
 		"Build sample adapters (ASN, geoip).",
 		"Add integration tests using mocked providers."
 	],
-	"passes": false
+	"passes": "partial"
 }

@@ -13,23 +13,36 @@ axum = { version = "0.8.7", features = ["http2", "macros", "multipart"] }
 clap = { version = "4.5.53", features = ["derive", "env", "string", "unicode"] }
 config = "0.15.19"
 # Ingest / normalization utilities
-calamine = "0.26.0"
+chrono = { version = "0.4", features = ["serde"] }
 csv = "1.1.7"
 dirs = "6.0.0"
+idna = "1.0"
 fern = { version = "0.7.1", features = ["colored", "date-based"] }
 flate2 = "1.0"
 futures-util = "0.3"
 hostname = "0.4"
+http-body-util = "0.1"
 hyper = { version = "1.8", features = ["full"] }
 hyper-util = "0.1"
+jsonwebtoken = "9.3"
 log = { version = "0.4.29", features = ["serde"] }
 once_cell = "1.20"
+# Observability: structured logging, metrics, tracing
+opentelemetry = { version = "0.27", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.27", features = ["trace", "metrics", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", features = ["trace", "metrics"] }
+prometheus = "0.13"
 regex = "1.11"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rustls = { version = "0.21", default-features = false, features = ["logging"] }
 rustls-native-certs = "0.7"
 rustls-pemfile = "1.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+# SHA-256 for one-way hashing of PII
+sha2 = "0.10"
+# Chrono for timestamps in audit logs
+chrono = "0.4"
 sqlx = { version = "0.7", features = [
   "macros",
   "postgres",

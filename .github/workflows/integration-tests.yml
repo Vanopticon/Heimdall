@@ -1,0 +1,63 @@
+---
+name: Integration Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - v1.0.0
+  push:
+    branches:
+      - main
+      - v1.0.0
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests:
+    name: Run Integration & E2E Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Docker Compose
+        run: |
+          docker compose version || echo "Docker Compose already installed"
+
+      - name: Build Rust project
+        run: cargo build --features integration-tests
+
+      - name: Run integration tests
+        env:
+          RUN_DOCKER_INTEGRATION_TESTS: 1
+        run: |
+          cargo test --features integration-tests --test integration_dev_db -- --nocapture
+          cargo test --features integration-tests --test integration_e2e -- --nocapture
+          cargo test --features integration-tests --test integration_enrichment_mock -- --nocapture
+          cargo test --features integration-tests --test integration_sync_partition -- --nocapture
+
+      - name: Cleanup Docker containers
+        if: always()
+        run: |
+          docker compose down -v || true
+          docker system prune -f || true
