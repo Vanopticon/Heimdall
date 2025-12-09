@@ -7,5 +7,5 @@
 		"Integrate into ingest pipeline.",
 		"Add tests ensuring plaintext never written to DB."
 	],
-	"passes": false
+	"passes": true
 }

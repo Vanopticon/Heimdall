@@ -34,6 +34,8 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 # SHA-256 for one-way hashing of PII
 sha2 = "0.10"
+# Chrono for timestamps in audit logs
+chrono = "0.4"
 sqlx = { version = "0.7", features = [
   "macros",
   "postgres",

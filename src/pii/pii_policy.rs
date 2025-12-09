@@ -363,30 +363,8 @@ mod hex_helper {
 }
 
 mod time_helper {
-	use std::time::{SystemTime, UNIX_EPOCH};
-
 	pub fn now_rfc3339() -> String {
-		let duration = SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.expect("time went backwards");
-		
-		// Simple ISO 8601 format (not perfect but sufficient for audit logs)
-		let total_secs = duration.as_secs();
-		let days = total_secs / 86400;
-		let years = 1970 + days / 365;
-		let remaining_days = days % 365;
-		let months = (remaining_days / 30).min(11) + 1;
-		let day = (remaining_days % 30) + 1;
-		
-		let time_secs = total_secs % 86400;
-		let hours = time_secs / 3600;
-		let minutes = (time_secs % 3600) / 60;
-		let seconds = time_secs % 60;
-		
-		format!(
-			"{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-			years, months, day, hours, minutes, seconds
-		)
+		chrono::Utc::now().to_rfc3339()
 	}
 }
 
