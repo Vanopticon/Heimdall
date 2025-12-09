@@ -1,0 +1,11 @@
+{
+	"category": "non-functional",
+	"description": "Security audit checklist and remediation tasks for TLS, OIDC, and PII controls",
+	"steps": [
+		"Draft docs/security/audit-checklist.md with checks and remediation steps",
+		"Create tasks to validate TLS enforcement and OIDC token validation",
+		"Add tests asserting no plaintext PII in backups and audit coverage for decrypts",
+		"Review checklist with security reviewers"
+	],
+	"passes": true
+}
