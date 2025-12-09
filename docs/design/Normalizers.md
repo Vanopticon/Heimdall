@@ -233,8 +233,10 @@ Changing the salt will change all canonical keys, requiring:
 ### Email Addresses
 
 - Basic structural validation only (presence of `@` and non-empty parts)
-- Does not validate RFC 5322 compliance for complex local parts
+- Does not support RFC 5322 quoted strings or comments in local parts
+- Complex email addresses (e.g., `"user@domain"@example.com`) may not parse correctly
 - Does not validate domain existence or MX records
+- Uses `rfind('@')` to split email, which handles most common cases but not all RFC 5322 edge cases
 
 ### Timestamps
 
@@ -272,7 +274,10 @@ cargo test --lib --features unit-tests normalizers
 ## Security Considerations
 
 1. **PII Handling**: Normalizers preserve input values; apply PII policies before normalization
-2. **Hash Algorithm**: Current key generation uses DefaultHasher; consider upgrading to SHA-256 for production
+2. **Hash Algorithm**: Current key generation uses `DefaultHasher` which is NOT cryptographically secure
+	- **CRITICAL**: Upgrade to SHA-256 before production deployment
+	- DefaultHasher is vulnerable to collision attacks and predictable output
+	- Current implementation is acceptable for development only
 3. **Salt Protection**: Protect salt values as sensitive configuration
 4. **Input Validation**: All inputs are validated before processing to prevent injection attacks
 

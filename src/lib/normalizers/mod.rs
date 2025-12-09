@@ -274,6 +274,16 @@ pub fn normalize_hash(input: &str) -> Result<NormalizedHash, NormalizerError> {
 /// The local part is case-sensitive per RFC 5321, so we preserve its case.
 /// The domain part is normalized using the domain normalizer.
 ///
+/// # Limitations
+///
+/// This implementation uses basic email parsing that splits on the last '@'
+/// character. It does not support RFC 5322 quoted strings or comments in the
+/// local part. Complex email addresses like `"user@domain"@example.com` or
+/// addresses with comments may not be parsed correctly.
+///
+/// For production use with complex email formats, consider implementing full
+/// RFC 5322 parsing or using a dedicated email parsing library.
+///
 /// # Examples
 ///
 /// ```
@@ -285,7 +295,8 @@ pub fn normalize_hash(input: &str) -> Result<NormalizedHash, NormalizerError> {
 pub fn normalize_email(input: &str) -> Result<NormalizedEmail, NormalizerError> {
 	let input = input.trim();
 
-	// Find the @ separator
+	// Find the @ separator (use rfind to handle local parts with @ in quotes,
+	// though full RFC 5322 support would require more complex parsing)
 	let at_pos = input
 		.rfind('@')
 		.ok_or_else(|| NormalizerError::InvalidEmail(format!("missing @ in email: {}", input)))?;
@@ -385,13 +396,20 @@ pub fn normalize_timestamp(input: &str) -> Result<NormalizedTimestamp, Normalize
 
 /// Generate a canonical key from a normalized value with salt and versioning.
 ///
-/// The canonical key is a SHA-256 hash of the concatenation of:
+/// The canonical key is a hash of the concatenation of:
 /// - Salt (for key derivation)
 /// - Version (as string)
 /// - The normalized value
 ///
 /// This ensures that keys are stable for identical inputs but change when
 /// the normalization algorithm or salt changes.
+///
+/// # Security Note
+///
+/// The current implementation uses `DefaultHasher` for deterministic hashing.
+/// This is NOT cryptographically secure and should be upgraded to SHA-256
+/// for production deployments to ensure collision resistance and prevent
+/// predictable key generation.
 ///
 /// # Examples
 ///
@@ -409,8 +427,10 @@ pub fn generate_canonical_key(normalized_value: &str, salt: &str) -> CanonicalKe
 	let version = 1u32;
 	let input = format!("{}:v{}:{}", salt, version, normalized_value);
 
-	// Use SHA-256-like hashing (we'll use DefaultHasher for simplicity and determinism)
-	// In production, consider using a proper cryptographic hash like SHA-256
+	// TODO: Upgrade to cryptographic hash (SHA-256) for production
+	// DefaultHasher is not cryptographically secure and may be vulnerable
+	// to collision attacks or predictable output. This is acceptable for
+	// initial development but MUST be replaced before production use.
 	let mut hasher = DefaultHasher::new();
 	input.hash(&mut hasher);
 	let hash_value = hasher.finish();
